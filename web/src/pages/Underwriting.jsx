@@ -89,7 +89,13 @@ export default function Underwriting() {
     if (schema.data && !profile) setProfile({ ...schema.data.defaults });
   }, [schema.data, profile]);
 
-  if (schema.error || model.error) return <ErrorBox error={schema.error ?? model.error} onRetry={schema.reload} />;
+  if (schema.error || model.error) {
+    const retry = () => {
+      if (schema.error) schema.reload();
+      if (model.error) model.reload();
+    };
+    return <ErrorBox error={schema.error ?? model.error} onRetry={retry} />;
+  }
   if (!schema.data || !model.data || !profile) return <Loading what="the applicant form" />;
 
   const { options, defaults } = schema.data;
@@ -105,6 +111,7 @@ export default function Underwriting() {
       setScored({ profile, result });
       setHistory((h) => [
         {
+          id: h.length ? h[0].id + 1 : 0,
           time: new Date().toLocaleTimeString(),
           score: result.credit_score,
           band: result.risk_band.code,
@@ -132,7 +139,7 @@ export default function Underwriting() {
       <div className="row">
         <span className="small muted">Start from an example</span>
         {Object.entries(presets).map(([name, preset]) => (
-          <button key={name} className="btn btn-sm" onClick={() => setProfile({ ...preset })}>
+          <button key={name} type="button" className="btn btn-sm" onClick={() => setProfile({ ...preset })}>
             {name}
           </button>
         ))}
@@ -273,6 +280,7 @@ function Result({ scored, model, history }) {
               </p>
             )}
             <button
+              type="button"
               className="btn btn-sm"
               onClick={() =>
                 download(
@@ -313,7 +321,7 @@ function Result({ scored, model, history }) {
               { key: "income", label: "Income", align: "right", render: (v) => num(v) },
               { key: "credit", label: "Credit", align: "right", render: (v) => num(v) },
             ]}
-            rows={history.map((h, i) => ({ ...h, id: i }))}
+            rows={history}
           />
         </Card>
       )}
@@ -323,7 +331,9 @@ function Result({ scored, model, history }) {
 
 function WhatIf({ profile, result, policy }) {
   const choices = Object.keys(WHAT_IF).filter((f) => f !== "late_payment_share" || profile.installments_paid);
-  const [field, setField] = useState(choices[0]);
+  const [selected, setField] = useState(choices[0]);
+  // A newly scored profile may no longer offer the selected input.
+  const field = choices.includes(selected) ? selected : choices[0];
   const [curve, setCurve] = useState(null);
   const [error, setError] = useState(null);
 

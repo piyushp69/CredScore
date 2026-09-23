@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, brier_score_loss, log_loss, precision_recall_curve, roc_auc_score, roc_curve
@@ -10,7 +12,11 @@ from .scoring import APPROVE, DECLINE, REVIEW, RISK_BANDS, DecisionPolicy, pd_to
 
 
 def _r(value, digits: int = 4):
-    return None if value is None or (isinstance(value, float) and np.isnan(value)) else round(float(value), digits)
+    """JSON-safe rounding: NaN (of any float type, incl. numpy float32) becomes None."""
+    if value is None:
+        return None
+    value = float(value)
+    return None if math.isnan(value) else round(value, digits)
 
 
 def ranking_metrics(y, s) -> dict:
@@ -107,7 +113,7 @@ def band_table(y, p) -> list[dict]:
 
 def policy_table(y, p, policy: DecisionPolicy) -> list[dict]:
     y, p = np.asarray(y), np.asarray(p)
-    decisions = np.array([policy.decide(v) for v in p])
+    decisions = np.where(p < policy.approve_below, APPROVE, np.where(p >= policy.decline_at, DECLINE, REVIEW))
     total_bad = y.sum()
     rows = []
     for decision in (APPROVE, REVIEW, DECLINE):

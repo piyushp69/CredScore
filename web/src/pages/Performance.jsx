@@ -6,18 +6,37 @@ import { C, Card, ChartCard, Disclosure, ErrorBox, GlassTooltip, Grid, Loading, 
 
 const TABS = ["Discrimination", "Calibration", "Decision policy", "Explainability", "Fairness"];
 
+/** Linear interpolation of a curve given as ascending `xs` / `ys` at `x`. */
+function interpolate(xs, ys, x) {
+  if (x <= xs[0]) return ys[0];
+  for (let i = 1; i < xs.length; i += 1) {
+    if (x <= xs[i]) {
+      const span = xs[i] - xs[i - 1];
+      return span > 0 ? ys[i - 1] + ((ys[i] - ys[i - 1]) * (x - xs[i - 1])) / span : ys[i];
+    }
+  }
+  return ys[ys.length - 1];
+}
+
 export default function Performance() {
   const model = useApi(api.model, []);
   const report = useApi(api.performance, []);
   const [tab, setTab] = useState(TABS[0]);
 
-  if (model.error || report.error) return <ErrorBox error={model.error ?? report.error} onRetry={model.reload} />;
+  if (model.error || report.error) {
+    const retry = () => {
+      if (model.error) model.reload();
+      if (report.error) report.reload();
+    };
+    return <ErrorBox error={model.error ?? report.error} onRetry={retry} />;
+  }
   if (!model.data || !report.data) return <Loading what="the evaluation report" />;
 
   const info = model.data;
   const { metrics, training } = info;
   const test = metrics.test;
   const baseline = metrics.baseline_test;
+  const aucGain = test.roc_auc - baseline.roc_auc;
 
   return (
     <div className="page">
@@ -30,12 +49,12 @@ export default function Performance() {
       </header>
 
       <div className="grid grid-auto">
-        <Stat label="ROC AUC" value={dec(test.roc_auc)} delta={`${(test.roc_auc - baseline.roc_auc).toFixed(3)} vs baseline`}
-              deltaUp title="Baseline: ranking by the average external score alone." />
+        <Stat label="ROC AUC" value={dec(test.roc_auc)} delta={`${aucGain >= 0 ? "+" : ""}${aucGain.toFixed(3)} vs baseline`}
+              deltaUp={aucGain >= 0} title="Baseline: ranking by the average external score alone." />
         <Stat label="Gini" value={dec(test.gini)} />
         <Stat label="KS statistic" value={dec(test.ks)} title="Max separation between good and bad score distributions." />
         <Stat label="PR AUC" value={dec(test.pr_auc)} sub={`random scores ${dec(test.base_rate)}`} />
-        <Stat label="Brier score" value={test.brier.toFixed(4)} title="Mean squared error of the predicted PD (lower is better)." />
+        <Stat label="Brier score" value={dec(test.brier, 4)} title="Mean squared error of the predicted PD (lower is better)." />
         <Stat label="Mean PD" value={pct(test.mean_pd, 2)} sub={`actual ${pct(test.base_rate, 2)}`} />
       </div>
 
@@ -51,10 +70,12 @@ export default function Performance() {
 }
 
 function Discrimination({ report, metrics, training }) {
-  const roc = report.roc.model.fpr.map((fpr, i) => ({
+  // The two curves are sampled at different FPRs; read the baseline at the model's.
+  const { model, baseline } = report.roc;
+  const roc = model.fpr.map((fpr, i) => ({
     fpr,
-    model: report.roc.model.tpr[i],
-    baseline: report.roc.baseline.tpr[Math.min(i, report.roc.baseline.tpr.length - 1)],
+    model: model.tpr[i],
+    baseline: interpolate(baseline.fpr, baseline.tpr, fpr),
   }));
   const hist = report.score_histogram;
   const distribution = hist.bin_start.map((start, i) => ({
@@ -252,7 +273,7 @@ function Policy({ report, policy }) {
             columns={[
               { key: "decile", label: "Decile" },
               { key: "default_rate", label: "Default rate", align: "right", render: (v) => pct(v, 1) },
-              { key: "lift", label: "Lift", align: "right", render: (v) => `${v.toFixed(2)}×` },
+              { key: "lift", label: "Lift", align: "right", render: (v) => (v == null ? "—" : `${v.toFixed(2)}×`) },
               { key: "cum_defaulters_captured", label: "Cum. defaulters", align: "right", render: (v) => pct(v, 1) },
             ]}
             rows={report.gains.map((r) => ({ ...r, id: r.decile }))}

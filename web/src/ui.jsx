@@ -61,6 +61,7 @@ export function Tabs({ tabs, active, onChange }) {
       {tabs.map((tab) => (
         <button
           key={tab}
+          type="button"
           role="tab"
           aria-selected={tab === active}
           className={`tab ${tab === active ? "active" : ""}`}
@@ -100,7 +101,7 @@ export function ErrorBox({ error, onRetry }) {
         <span>{error?.message ?? String(error)}</span>
       </div>
       {onRetry && (
-        <button className="btn btn-sm" onClick={onRetry} style={{ alignSelf: "flex-start" }}>
+        <button type="button" className="btn btn-sm" onClick={onRetry} style={{ alignSelf: "flex-start" }}>
           Try again
         </button>
       )}

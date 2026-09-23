@@ -23,11 +23,15 @@ export function download(filename, content, mime = "text/plain") {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Revoking synchronously can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-/** Minimal RFC-4180 CSV parser: handles quoted fields, embedded commas and newlines. */
-export function parseCsv(text) {
+/**
+ * Minimal RFC-4180 CSV parser: handles quoted fields, embedded commas and newlines.
+ * Columns listed in `textColumns` stay strings (an ID like "007" must not become 7).
+ */
+export function parseCsv(text, textColumns = []) {
   const rows = [];
   let row = [];
   let value = "";
@@ -58,17 +62,22 @@ export function parseCsv(text) {
     rows.push(row);
   }
   const [header = [], ...body] = rows.filter((r) => r.some((cell) => cell !== ""));
-  return body.map((cells) =>
-    Object.fromEntries(header.map((key, i) => [key.trim(), coerce(cells[i])])),
-  );
+  // Excel prefixes UTF-8 CSVs with a BOM, which would otherwise stick to the first column name.
+  const keys = header.map((key, i) => (i === 0 ? key.replace(/^\uFEFF/, "") : key).trim());
+  const asText = new Set(textColumns);
+  return body.map((cells) => Object.fromEntries(keys.map((key, i) => [key, coerce(cells[i], asText.has(key))])));
 }
 
-function coerce(raw) {
+const DECIMAL = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i;
+
+function coerce(raw, asText) {
   const value = (raw ?? "").trim();
   if (value === "") return null;
+  if (asText) return value;
   if (/^(true|false)$/i.test(value)) return value.toLowerCase() === "true";
+  // Number() also accepts "0x1F", "Infinity" and "1e999"; only plain finite decimals are numbers.
   const asNumber = Number(value);
-  return Number.isNaN(asNumber) ? value : asNumber;
+  return DECIMAL.test(value) && Number.isFinite(asNumber) ? asNumber : value;
 }
 
 export function toCsv(rows, columns) {
@@ -76,7 +85,7 @@ export function toCsv(rows, columns) {
   const cell = (v) => {
     if (v == null) return "";
     const text = String(v);
-    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   };
   return [keys.join(","), ...rows.map((row) => keys.map((k) => cell(row[k])).join(","))].join("\n");
 }
@@ -108,10 +117,15 @@ export const RISKY = {
 
 /** Deterministic pseudo-random variations of the presets, for trying batch scoring. */
 export function demoBatch(typical, n = 250, seed = 7) {
-  let state = seed;
+  // mulberry32, in exact 32-bit integer arithmetic. (A float LCG overflows 2^53 in
+  // the multiply and silently loses its low bits.)
+  let state = seed >>> 0;
   const random = () => {
-    state = (state * 1103515245 + 12345) % 2 ** 31;
-    return state / 2 ** 31;
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
   };
   const jitter = (value, spread) => value * (1 + (random() - 0.5) * spread);
   const anchors = [typical, STRONG, RISKY];

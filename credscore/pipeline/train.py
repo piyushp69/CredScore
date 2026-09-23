@@ -16,6 +16,7 @@ Design choices, versus a naive SMOTE + label-encoding setup:
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 import warnings
@@ -218,8 +219,6 @@ def train(base: pd.DataFrame, cfg: TrainConfig | None = None) -> tuple[CreditMod
 
 
 def save(model: CreditModel, report: dict, model_dir: Path | None = None) -> Path:
-    import json
-
     model_dir = Path(model_dir or config.model_dir())
     model.save(model_dir)
     (model_dir / config.REPORT_FILE).write_text(json.dumps(report, indent=2), encoding="utf-8")

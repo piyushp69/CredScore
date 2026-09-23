@@ -209,12 +209,12 @@ def build_base_table(
     ):
         base = base.join(aggregates, how="left")
 
-    for column in base.columns:
-        if column in CATEGORICAL_FEATURES or column == GENDER_COLUMN:
-            base[column] = base[column].astype("category")
-        elif column != TARGET_COLUMN:
-            base[column] = base[column].astype("float32")
-    return base.reset_index()
+    dtypes = {
+        column: "category" if column in CATEGORICAL_FEATURES or column == GENDER_COLUMN else "float32"
+        for column in base.columns
+        if column != TARGET_COLUMN
+    }
+    return base.astype(dtypes).reset_index()
 
 
 # --------------------------------------------------------------------------- #
@@ -316,13 +316,9 @@ class FeatureSpec:
         A feature absent from a record takes its training default; a feature
         present with value None is treated as missing.
         """
-        rows = []
-        for record in records:
-            row = {}
-            for column in self.base_features:
-                value = record[column] if column in record else self.defaults[column]
-                row[column] = np.nan if value is None else value
-            rows.append(row)
+        # Dict merge keeps "absent -> default" and "None -> missing" apart at C
+        # speed; `transform` turns None into NaN / a missing category.
+        rows = [self.defaults | record for record in records]
         return self.transform(pd.DataFrame(rows, columns=self.base_features))
 
     def to_dict(self) -> dict:

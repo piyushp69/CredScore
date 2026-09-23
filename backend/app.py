@@ -26,10 +26,8 @@ from credscore.service import ScoringService
 
 from .schemas import (
     EXAMPLE_PROFILE,
-    BatchItem,
     BatchRequest,
     BatchResponse,
-    BatchSummary,
     FeatureScoreRequest,
     Health,
     ScoreResult,
@@ -45,9 +43,12 @@ async def lifespan(app: FastAPI):
     try:
         app.state.service = ScoringService.load()
         log.info("Loaded model %s", app.state.service.model.version)
-    except (ModelNotFoundError, ValueError) as exc:
+    except ModelNotFoundError as exc:
         app.state.load_error = str(exc)
         log.warning("API started without a model: %s", exc)
+    except Exception as exc:  # corrupt bundle, bad policy override...: serve /health, not a crash loop
+        app.state.load_error = f"Could not load the model bundle: {exc}"
+        log.exception("API started without a model")
     yield
 
 
@@ -144,40 +145,43 @@ def score_batch(
     reasons: int = Query(3, ge=0, le=10, description="Risk reasons per applicant (0 is fastest)."),
 ):
     """Score up to 10,000 applicant profiles. Invalid rows are reported, not fatal."""
-    items: list[BatchItem] = []
+    # Plain dicts: FastAPI validates the response once against BatchResponse, so
+    # building pydantic objects here would only repeat that work per row.
+    items: list[dict] = []
     valid: list[tuple[int, ApplicantProfile]] = []
     for index, raw in enumerate(request.applicants):
-        row = _clean_row(dict(raw))
+        row = _clean_row(raw)
         applicant_id = row.pop("applicant_id", None)
-        item = BatchItem(index=index, applicant_id=None if applicant_id is None else str(applicant_id))
+        item = {"index": index, "applicant_id": None if applicant_id is None else str(applicant_id),
+                "result": None, "error": None}
         try:
             profile = ApplicantProfile.model_validate(row)
             errors = service.profile_errors(profile)
         except ValidationError as exc:
             errors = [f"{'.'.join(map(str, e['loc'])) or 'row'}: {e['msg']}" for e in exc.errors()]
         if errors:
-            item.error = "; ".join(errors)
+            item["error"] = "; ".join(errors)
         else:
             valid.append((index, profile))
         items.append(item)
 
     results = service.score_profiles([p for _, p in valid], top_k=0, n_reasons=reasons)
     for (index, _), result in zip(valid, results):
-        items[index].result = ScoreResult(**result)
+        items[index]["result"] = result
 
     decisions = {"APPROVE": 0, "REVIEW": 0, "DECLINE": 0}
     for result in results:
         decisions[result["decision"]] += 1
     n = len(results)
-    summary = BatchSummary(
-        submitted=len(items),
-        scored=n,
-        failed=len(items) - n,
-        decisions=decisions,
-        mean_probability_of_default=round(sum(r["probability_of_default"] for r in results) / n, 6) if n else None,
-        mean_credit_score=round(sum(r["credit_score"] for r in results) / n, 1) if n else None,
-    )
-    return BatchResponse(summary=summary, results=items)
+    summary = {
+        "submitted": len(items),
+        "scored": n,
+        "failed": len(items) - n,
+        "decisions": decisions,
+        "mean_probability_of_default": round(sum(r["probability_of_default"] for r in results) / n, 6) if n else None,
+        "mean_credit_score": round(sum(r["credit_score"] for r in results) / n, 1) if n else None,
+    }
+    return {"summary": summary, "results": items}
 
 
 def create_app() -> FastAPI:

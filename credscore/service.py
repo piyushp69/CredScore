@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import math
 from dataclasses import asdict
+from functools import cached_property
 from pathlib import Path
 
 import numpy as np
@@ -17,9 +18,10 @@ from .features import DERIVED_FEATURES
 from .labels import feature_label, format_value
 from .model import CreditModel
 from .profile import CATEGORICAL_FIELDS, ApplicantProfile, profile_defaults, profile_to_base_features
-from .scoring import DecisionPolicy, pd_to_score, risk_band, scorecard_description
+from .scoring import RISK_BANDS, DecisionPolicy, pd_to_score, risk_band, scorecard_description
 
 KEY_METRICS = ["CREDIT_INCOME_RATIO", "ANNUITY_INCOME_RATIO", "PAYMENT_RATE", "EXT_SOURCE_MEAN"]
+_BAND_DICTS = {band.code: asdict(band) for band in RISK_BANDS}
 
 
 def _json_value(value):
@@ -38,11 +40,16 @@ class ScoringService:
         self.spec = model.spec
         self.model_dir = Path(model_dir) if model_dir else None
         stored = model.metadata["policy"]
+        approve_below = config.env_float("CREDSCORE_APPROVE_PD")
+        decline_at = config.env_float("CREDSCORE_DECLINE_PD")
         self.policy = DecisionPolicy(
-            approve_below=config.env_float("CREDSCORE_APPROVE_PD") or stored["approve_below"],
-            decline_at=config.env_float("CREDSCORE_DECLINE_PD") or stored["decline_at"],
+            approve_below=stored["approve_below"] if approve_below is None else approve_below,
+            decline_at=stored["decline_at"] if decline_at is None else decline_at,
         )
         self._feature_index = {f: i for i, f in enumerate(self.spec.feature_names)}
+        self._base_features = set(self.spec.base_features)
+        self._labels = {f: feature_label(f) for f in self.spec.feature_names}
+        self._allowed = {feature: set(values) for feature, values in self.spec.categories.items()}
 
     @classmethod
     def load(cls, model_dir: Path | None = None) -> "ScoringService":
@@ -57,14 +64,13 @@ class ScoringService:
         errors = []
         for field, feature in CATEGORICAL_FIELDS.items():
             value = getattr(profile, field)
-            allowed = self.spec.categories.get(feature)
+            allowed = self._allowed.get(feature)
             if value is not None and allowed is not None and value not in allowed:
-                errors.append(f"{field}: '{value}' is not one of {allowed}")
+                errors.append(f"{field}: '{value}' is not one of {self.spec.categories[feature]}")
         return errors
 
     def unknown_features(self, features: dict) -> list[str]:
-        base = set(self.spec.base_features)
-        return sorted(f for f in features if f not in base)
+        return sorted(f for f in features if f not in self._base_features)
 
     # ------------------------------------------------------------------ #
     # Scoring
@@ -76,62 +82,76 @@ class ScoringService:
         """Score base-feature records; see `FeatureSpec.frame_from_records` for missing keys."""
         if not records:
             return []
-        records = [{k: v for k, v in r.items() if k in self._feature_index} for r in records]
+        records = [{k: v for k, v in r.items() if k in self._base_features} for r in records]
         X = self.spec.frame_from_records(records)
-        pds = self.model.predict_pd(X)
         explain = top_k > 0 or n_reasons > 0
-        contributions = self.model.contributions(X) if explain else None
-        values = X.astype(object).to_numpy()
+        if explain:
+            pds, contributions = self.model.predict_with_contributions(X)
+            # Only the first `n_candidates` features by |SHAP| can become explanations or reasons.
+            n_candidates = min(max(top_k, n_reasons * 3), len(self.spec.feature_names))
+            candidates = np.argsort(-np.abs(contributions[:, :-1]), axis=1, kind="stable")[:, :n_candidates]
+        else:
+            pds = self.model.predict_pd(X)
+        scores = pd_to_score(pds)
+        # Column arrays are views of X; reading single cells from them avoids
+        # copying the whole matrix into Python objects.
+        columns = [X[f].to_numpy() for f in self.spec.feature_names]
+        key_metrics = [f for f in KEY_METRICS if f in self._feature_index]
         results = []
         for i, record in enumerate(records):
-            result = self._decision(float(pds[i]))
-            result["key_metrics"] = {
-                f: self._feature_view(f, values[i]) for f in KEY_METRICS if f in self._feature_index
-            }
-            if contributions is not None:
-                result |= self._explain(values[i], contributions[i], set(record), top_k, n_reasons)
+            result = self._decision(float(pds[i]), int(scores[i]))
+            result["key_metrics"] = {f: self._feature_view(f, columns, i) for f in key_metrics}
+            if explain:
+                result |= self._explain(columns, i, contributions[i], candidates[i], record.keys(), top_k, n_reasons)
             results.append(result)
         return results
 
-    def _decision(self, pd_value: float) -> dict:
-        score = pd_to_score(pd_value)
+    def _decision(self, pd_value: float, score: int) -> dict:
         return {
             "probability_of_default": round(pd_value, 6),
             "credit_score": score,
-            "risk_band": asdict(risk_band(score)),
+            "risk_band": dict(_BAND_DICTS[risk_band(score).code]),
             "decision": self.policy.decide(pd_value),
             "decision_reason": self.policy.explain(pd_value),
             "model_version": self.model.version,
         }
 
-    def _feature_view(self, feature: str, row_values) -> dict:
-        value = _json_value(row_values[self._feature_index[feature]])
-        return {"label": feature_label(feature), "value": value, "display_value": format_value(feature, value)}
+    def _feature_view(self, feature: str, columns: list, row: int) -> dict:
+        value = _json_value(columns[self._feature_index[feature]][row])
+        return {"label": self._labels[feature], "value": value, "display_value": format_value(feature, value)}
 
-    def _explain(self, row_values, contributions, provided: set, top_k: int, n_reasons: int) -> dict:
-        feature_contribs = contributions[:-1]
-        order = np.argsort(-np.abs(feature_contribs))
-        explanations = []
-        for j in order[: max(top_k, n_reasons * 3)]:
-            feature = self.spec.feature_names[j]
-            contribution = float(feature_contribs[j])
+    def _explain(self, columns: list, row: int, contributions, candidates, provided, top_k: int, n_reasons: int) -> dict:
+        """Top-|SHAP| explanations and the leading risk-raising reasons.
+
+        Views are only built for features that are actually returned; batch
+        scoring asks for reasons alone, so most candidates are skipped cheaply.
+        """
+        explanations, reasons = [], []
+        for j in candidates:
+            contribution = float(contributions[j])
             if contribution == 0:
                 continue
-            if feature in DERIVED_FEATURES:
-                source = "derived"
-            else:
-                source = "applicant" if feature in provided else "default"
-            explanations.append(
-                {"feature": feature, **self._feature_view(feature, row_values),
-                 "contribution": round(contribution, 5),
-                 "effect": "increases_risk" if contribution > 0 else "decreases_risk",
-                 "source": source}
-            )
-        reasons = [
-            f"{e['label']}: {e['display_value']}" for e in explanations if e["effect"] == "increases_risk"
-        ][:n_reasons]
+            as_explanation = len(explanations) < top_k
+            as_reason = contribution > 0 and len(reasons) < n_reasons
+            if not (as_explanation or as_reason):
+                continue
+            feature = self.spec.feature_names[j]
+            view = self._feature_view(feature, columns, row)
+            if as_reason:
+                reasons.append(f"{view['label']}: {view['display_value']}")
+            if as_explanation:
+                if feature in DERIVED_FEATURES:
+                    source = "derived"
+                else:
+                    source = "applicant" if feature in provided else "default"
+                explanations.append(
+                    {"feature": feature, **view,
+                     "contribution": round(contribution, 5),
+                     "effect": "increases_risk" if contribution > 0 else "decreases_risk",
+                     "source": source}
+                )
         return {
-            "explanations": explanations[:top_k],
+            "explanations": explanations,
             "reasons": reasons,
             "base_log_odds": round(float(contributions[-1]), 5),
         }
@@ -156,6 +176,10 @@ class ScoringService:
         }
 
     def schema(self) -> dict:
+        return self._schema
+
+    @cached_property
+    def _schema(self) -> dict:
         return {
             "profile": ApplicantProfile.model_json_schema(),
             "options": {
@@ -180,8 +204,17 @@ class ScoringService:
             return None
         return json.loads((self.model_dir / name).read_text(encoding="utf-8"))
 
-    def performance_report(self) -> dict | None:
+    # Artifacts belong to the loaded model bundle, so they are read once, like the model.
+    @cached_property
+    def _report(self) -> dict | None:
         return self._artifact(config.REPORT_FILE)
 
-    def insights(self) -> dict | None:
+    @cached_property
+    def _insights(self) -> dict | None:
         return self._artifact(config.INSIGHTS_FILE)
+
+    def performance_report(self) -> dict | None:
+        return self._report
+
+    def insights(self) -> dict | None:
+        return self._insights

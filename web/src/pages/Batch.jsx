@@ -8,9 +8,10 @@ const BIN = 20;
 
 function histogram(scores) {
   const bins = [];
-  for (let start = 300; start < 850; start += BIN) {
-    bins.push({ start, label: start, count: scores.filter((s) => s >= start && s < start + BIN).length });
-  }
+  for (let start = 300; start < 850; start += BIN) bins.push({ start, label: start, count: 0 });
+  scores.forEach((s) => {
+    bins[Math.min(bins.length - 1, Math.max(0, Math.floor((s - 300) / BIN)))].count += 1;
+  });
   return bins;
 }
 
@@ -25,11 +26,31 @@ export default function Batch() {
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef(null);
 
-  if (schema.error || model.error) return <ErrorBox error={schema.error ?? model.error} onRetry={schema.reload} />;
-  if (!schema.data || !model.data) return <Loading what="the applicant schema" />;
+  // Column checks look at the header (first row) only; `clean` drops unknown columns.
+  const { fields, unknown, missing, clean } = useMemo(() => {
+    const profile = schema.data?.profile;
+    if (!profile) return { fields: [], unknown: [], missing: [], clean: null };
+    const known = Object.keys(profile.properties);
+    const header = Object.keys(rows?.[0] ?? {});
+    const extra = rows ? header.filter((c) => c !== "applicant_id" && !known.includes(c)) : [];
+    return {
+      fields: known,
+      unknown: extra,
+      missing: rows ? (profile.required ?? []).filter((f) => !header.includes(f)) : [],
+      clean: extra.length
+        ? rows.map((row) => Object.fromEntries(Object.entries(row).filter(([k]) => !extra.includes(k))))
+        : rows,
+    };
+  }, [schema.data, rows]);
 
-  const fields = Object.keys(schema.data.profile.properties);
-  const required = schema.data.profile.required ?? [];
+  if (schema.error || model.error) {
+    const retry = () => {
+      if (schema.error) schema.reload();
+      if (model.error) model.reload();
+    };
+    return <ErrorBox error={schema.error ?? model.error} onRetry={retry} />;
+  }
+  if (!schema.data || !model.data) return <Loading what="the applicant schema" />;
 
   const load = (loaded, name) => {
     setRows(loaded);
@@ -41,15 +62,11 @@ export default function Batch() {
   const onFile = async (file) => {
     if (!file) return;
     try {
-      load(parseCsv(await file.text()), file.name);
+      load(parseCsv(await file.text(), ["applicant_id"]), file.name);
     } catch (err) {
       setError(new Error(`Could not read ${file.name}: ${err.message}`));
     }
   };
-
-  const unknown = rows ? Object.keys(rows[0] ?? {}).filter((c) => c !== "applicant_id" && !fields.includes(c)) : [];
-  const missing = rows ? required.filter((f) => !(f in (rows[0] ?? {}))) : [];
-  const clean = rows?.map((row) => Object.fromEntries(Object.entries(row).filter(([k]) => !unknown.includes(k))));
 
   const score = async () => {
     setBusy(true);
@@ -103,7 +120,10 @@ export default function Batch() {
         <div style={{ fontSize: "1.6rem" }}>⇪</div>
         <b className="ink">Drop a CSV here, or click to choose one</b>
         <p className="tiny muted">One row per applicant, columns as in the template. Optional columns may be left out or empty.</p>
-        <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+        <input ref={fileInput} type="file" accept=".csv,text/csv" hidden onChange={(e) => {
+            onFile(e.target.files?.[0]);
+            e.target.value = ""; // so choosing the same file again still fires onChange
+          }} />
       </div>
 
       {error && <ErrorBox error={error} />}
@@ -144,7 +164,7 @@ function Results({ response, rows, bands }) {
       })),
     [results],
   );
-  const bins = useMemo(() => histogram(table.map((r) => r.credit_score).filter(Boolean)), [table]);
+  const bins = useMemo(() => histogram(table.map((r) => r.credit_score).filter((s) => s != null)), [table]);
   const decisions = ["APPROVE", "REVIEW", "DECLINE"].map((key) => ({
     key,
     name: `${DECISION[key].icon} ${DECISION[key].label}`,

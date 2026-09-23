@@ -43,6 +43,11 @@ class CreditModel:
         """SHAP values in log-odds space, shape (n_rows, n_features + 1); last column is the bias."""
         return self.booster.predict(self._dmatrix(X), pred_contribs=True)
 
+    def predict_with_contributions(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+        """`predict_pd` and `contributions` from a single DMatrix."""
+        dmatrix = self._dmatrix(X)
+        return self.booster.predict(dmatrix), self.booster.predict(dmatrix, pred_contribs=True)
+
     def save(self, directory: Path) -> None:
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)

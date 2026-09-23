@@ -46,12 +46,36 @@ async function request(path, { method = "GET", body, params } = {}) {
   return payload;
 }
 
+// These payloads only change when the API loads a new model, so every page shares
+// one request per session. Failed requests are evicted so "Try again" refetches.
+const cache = new Map();
+function cached(path) {
+  if (!cache.has(path)) {
+    cache.set(
+      path,
+      request(path).catch((error) => {
+        cache.delete(path);
+        throw error;
+      }),
+    );
+  }
+  return cache.get(path);
+}
+
+let loadedVersion;
+
 export const api = {
-  health: () => request("/health"),
-  model: () => request("/model"),
-  performance: () => request("/model/performance"),
-  schema: () => request("/schema"),
-  insights: () => request("/insights"),
+  async health() {
+    const health = await request("/health");
+    // The API was restarted with a different model: drop its cached payloads.
+    if (loadedVersion !== undefined && health.model_version !== loadedVersion) cache.clear();
+    loadedVersion = health.model_version;
+    return health;
+  },
+  model: () => cached("/model"),
+  performance: () => cached("/model/performance"),
+  schema: () => cached("/schema"),
+  insights: () => cached("/insights"),
   score: (profile, topK = 12) => request("/score", { method: "POST", body: profile, params: { top_k: topK } }),
 
   /** Scores any number of profiles, chunked to respect the API's batch limit. */
