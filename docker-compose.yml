@@ -1,0 +1,14 @@
+# Serves the API and the dashboard from one container, using an already-trained
+# bundle in ./models. Train first on the host: python -m credscore.pipeline all
+services:
+  credscore:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/v1/health').status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5

@@ -1,65 +1,224 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Any
-import pickle
-import pandas as pd
-import shap
+"""CredScore REST API.
+
+Run with:  uvicorn backend.app:app --reload --port 8000
+Docs at:   http://127.0.0.1:8000/docs
+"""
+
+from __future__ import annotations
+
+import logging
+import math
 import os
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Annotated
 
-app = FastAPI(title="Credit Risk ML API")
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
-# Load models at startup
-models_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models')
+from credscore import __version__
+from credscore.model import ModelNotFoundError
+from credscore.profile import ApplicantProfile
+from credscore.service import ScoringService
 
-print("Loading model and explainer...")
-with open(os.path.join(models_dir, 'xgboost_model.pkl'), 'rb') as f:
-    clf = pickle.load(f)
-    
-with open(os.path.join(models_dir, 'feature_names.pkl'), 'rb') as f:
-    feature_names = pickle.load(f)
-    
-with open(os.path.join(models_dir, 'shap_explainer.pkl'), 'rb') as f:
-    explainer = pickle.load(f)
+from .schemas import (
+    EXAMPLE_PROFILE,
+    BatchItem,
+    BatchRequest,
+    BatchResponse,
+    BatchSummary,
+    FeatureScoreRequest,
+    Health,
+    ScoreResult,
+)
 
-class ApplicantFeatures(BaseModel):
-    features: Dict[str, float]
+log = logging.getLogger("credscore.api")
+WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
-@app.get("/")
-def read_root():
-    return {"message": "Credit Risk ML API is running"}
 
-@app.post("/predict")
-def predict(applicant: ApplicantFeatures):
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.service, app.state.load_error = None, None
     try:
-        # Create DataFrame aligned with feature_names, missing filled with 0.0
-        data_dict = {feat: [applicant.features.get(feat, 0.0)] for feat in feature_names}
-        data = pd.DataFrame(data_dict)
-        
-        # Predict probability of default
-        prob_default = clf.predict_proba(data)[0][1]
-        
-        # Calculate SHAP values
-        shap_values = explainer.shap_values(data)
-        
-        if isinstance(shap_values, list):
-            sv = shap_values[1][0]
+        app.state.service = ScoringService.load()
+        log.info("Loaded model %s", app.state.service.model.version)
+    except (ModelNotFoundError, ValueError) as exc:
+        app.state.load_error = str(exc)
+        log.warning("API started without a model: %s", exc)
+    yield
+
+
+def get_service(request: Request) -> ScoringService:
+    service = request.app.state.service
+    if service is None:
+        raise HTTPException(status_code=503, detail=request.app.state.load_error or "Model not loaded")
+    return service
+
+
+Service = Annotated[ScoringService, Depends(get_service)]
+router = APIRouter(prefix="/api/v1")
+
+
+@router.get("/health", response_model=Health, tags=["meta"])
+def health(request: Request):
+    service = request.app.state.service
+    if service is None:
+        return Health(status="degraded", model_loaded=False, detail=request.app.state.load_error)
+    return Health(status="ok", model_loaded=True, model_version=service.model.version)
+
+
+@router.get("/model", tags=["model"])
+def model_info(service: Service):
+    """Model version, test-set metrics, decision policy and scorecard definition."""
+    return service.model_info()
+
+
+@router.get("/model/performance", tags=["model"])
+def model_performance(service: Service):
+    """Evaluation report: curves, calibration, gains, bands, policy outcomes, fairness."""
+    report = service.performance_report()
+    if report is None:
+        raise HTTPException(status_code=404, detail="No evaluation report found; retrain the model.")
+    return report
+
+
+@router.get("/model/importance", tags=["model"])
+def model_importance(service: Service, top: int = Query(20, ge=1, le=100)):
+    report = service.performance_report() or {}
+    return {"importance": report.get("importance", [])[:top]}
+
+
+@router.get("/schema", tags=["model"])
+def schema(service: Service):
+    """Applicant profile fields, allowed category values, typical defaults and base features."""
+    return service.schema()
+
+
+@router.get("/insights", tags=["portfolio"])
+def insights(service: Service):
+    """Observed default rates across applicant segments of the training portfolio."""
+    data = service.insights()
+    if data is None:
+        raise HTTPException(status_code=404, detail="No insights found; run `python -m credscore.pipeline insights`.")
+    return data
+
+
+@router.post("/score", response_model=ScoreResult, tags=["scoring"])
+def score(
+    service: Service,
+    profile: Annotated[ApplicantProfile, Body(openapi_examples={"applicant": {"value": EXAMPLE_PROFILE}})],
+    top_k: int = Query(10, ge=0, le=50, description="Number of feature explanations to return."),
+):
+    """Score one applicant: PD, credit score, risk band, decision and explanations."""
+    errors = service.profile_errors(profile)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    return service.score_profiles([profile], top_k=top_k)[0]
+
+
+@router.post("/score/features", response_model=ScoreResult, tags=["scoring"])
+def score_features(service: Service, request: FeatureScoreRequest, top_k: int = Query(10, ge=0, le=50)):
+    """Score raw base features (advanced). Unknown feature names are ignored with a warning."""
+    unknown = service.unknown_features(request.features)
+    result = service.score_records([request.features], top_k=top_k)[0]
+    if unknown:
+        result["warnings"] = [f"Ignored unknown features: {', '.join(unknown)}"]
+    return result
+
+
+def _clean_row(row: dict) -> dict:
+    """CSV-friendly: NaN and empty strings mean 'not provided'."""
+    return {
+        k: None if (isinstance(v, float) and math.isnan(v)) or (isinstance(v, str) and not v.strip()) else v
+        for k, v in row.items()
+    }
+
+
+@router.post("/score/batch", response_model=BatchResponse, tags=["scoring"])
+def score_batch(
+    service: Service,
+    request: BatchRequest,
+    reasons: int = Query(3, ge=0, le=10, description="Risk reasons per applicant (0 is fastest)."),
+):
+    """Score up to 10,000 applicant profiles. Invalid rows are reported, not fatal."""
+    items: list[BatchItem] = []
+    valid: list[tuple[int, ApplicantProfile]] = []
+    for index, raw in enumerate(request.applicants):
+        row = _clean_row(dict(raw))
+        applicant_id = row.pop("applicant_id", None)
+        item = BatchItem(index=index, applicant_id=None if applicant_id is None else str(applicant_id))
+        try:
+            profile = ApplicantProfile.model_validate(row)
+            errors = service.profile_errors(profile)
+        except ValidationError as exc:
+            errors = [f"{'.'.join(map(str, e['loc'])) or 'row'}: {e['msg']}" for e in exc.errors()]
+        if errors:
+            item.error = "; ".join(errors)
         else:
-            sv = shap_values[0]
-            
-        feature_contributions = {feat: float(val) for feat, val in zip(feature_names, sv)}
-        sorted_features = sorted(feature_contributions.items(), key=lambda x: x[1], reverse=True)
-        
-        top_3_positive = {k: v for k, v in sorted_features[:3]}
-        top_3_negative = {k: v for k, v in sorted_features[-3:]}
-        
-        return {
-            "probability_of_default": float(prob_default),
-            "top_3_positive_contributions": top_3_positive,
-            "top_3_negative_contributions": top_3_negative
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            valid.append((index, profile))
+        items.append(item)
+
+    results = service.score_profiles([p for _, p in valid], top_k=0, n_reasons=reasons)
+    for (index, _), result in zip(valid, results):
+        items[index].result = ScoreResult(**result)
+
+    decisions = {"APPROVE": 0, "REVIEW": 0, "DECLINE": 0}
+    for result in results:
+        decisions[result["decision"]] += 1
+    n = len(results)
+    summary = BatchSummary(
+        submitted=len(items),
+        scored=n,
+        failed=len(items) - n,
+        decisions=decisions,
+        mean_probability_of_default=round(sum(r["probability_of_default"] for r in results) / n, 6) if n else None,
+        mean_credit_score=round(sum(r["credit_score"] for r in results) / n, 1) if n else None,
+    )
+    return BatchResponse(summary=summary, results=items)
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="CredScore API",
+        version=__version__,
+        description="Credit default risk scoring with explanations, trained on the Home Credit dataset.",
+        lifespan=lifespan,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=os.environ.get("CREDSCORE_CORS_ORIGINS", "*").split(","),
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.middleware("http")
+    async def add_timing_header(request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        response.headers["X-Process-Time-Ms"] = f"{(time.perf_counter() - start) * 1000:.1f}"
+        return response
+
+    app.include_router(router)
+
+    # Serve the built React app from the same origin when it exists (`npm run build`
+    # in web/). In development the Vite dev server proxies /api here instead.
+    if WEB_DIST.is_dir():
+        app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
+    else:
+        @app.get("/", include_in_schema=False)
+        def root():
+            return {"name": "CredScore API", "version": __version__, "docs": "/docs", "health": "/api/v1/health"}
+
+    return app
+
+
+app = create_app()
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run("backend.app:app", host="127.0.0.1", port=8000)
