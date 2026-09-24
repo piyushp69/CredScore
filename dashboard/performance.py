@@ -31,12 +31,15 @@ def render() -> None:
                 f"applications, evaluated on {num(training.get('n_test'))} held-out applications the model never saw.")
 
     cols = st.columns(6)
-    cols[0].metric("ROC AUC", dec(test["roc_auc"]), f"{auc_gain:+.3f} vs baseline",
-                   help="Baseline: ranking by the average external score alone.")
+    # Delta chips stay short (six columns cut long ones off); the detail goes in the tooltip.
+    cols[0].metric("ROC AUC", dec(test["roc_auc"]), f"{auc_gain:+.3f}",
+                   help=f"Change vs the baseline that ranks by the average external score alone "
+                        f"(AUC {dec(baseline['roc_auc'])}).")
     cols[1].metric("Gini", dec(test["gini"]))
     cols[2].metric("KS statistic", dec(test["ks"]), help="Max separation between good and bad score distributions.")
-    cols[3].metric("PR AUC", dec(test["pr_auc"]), f"random scores {dec(test['base_rate'])}",
-                   delta_color="off", delta_arrow="off")
+    cols[3].metric("PR AUC", dec(test["pr_auc"]), f"random {dec(test['base_rate'])}",
+                   delta_color="off", delta_arrow="off",
+                   help="A random ranking scores a PR AUC equal to the default rate, shown below the value.")
     cols[4].metric("Brier score", dec(test["brier"], 4), help="Mean squared error of the predicted PD (lower is better).")
     cols[5].metric("Mean PD", pct(test["mean_pd"], 2), f"actual {pct(test['base_rate'], 2)}",
                    delta_color="off", delta_arrow="off")

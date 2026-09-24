@@ -139,6 +139,14 @@ def test_portfolio_and_performance_pages_render():
     assert any(m.label == "ROC AUC" for m in at.metric)
 
 
+def test_chart_titles_are_drawn_above_the_chart():
+    # A Plotly title overlaps the legend, and an empty title object is drawn as "undefined".
+    at = page("performance").run()
+    specs = [json.loads(chart.proto.spec) for chart in at.get("plotly_chart")]
+    assert specs and all("title" not in spec["layout"] for spec in specs)
+    assert any(md.value == "**ROC curve**" for md in at.markdown)
+
+
 def test_policy_outcomes_keep_the_cutoffs_they_were_measured_at(model_dir, monkeypatch):
     monkeypatch.setenv("CREDSCORE_APPROVE_PD", "0.01")
     monkeypatch.setenv("CREDSCORE_DECLINE_PD", "0.9")

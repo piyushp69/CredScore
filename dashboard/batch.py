@@ -141,6 +141,8 @@ def _results(response: dict, rows: list[dict], bands: list[dict]) -> None:
             text=[num(summary["decisions"][k]) for k in keys][::-1], textposition="outside",
             hovertemplate="%{y}: %{x:,} applicants<extra></extra>",
         ))
+        # Headroom so the count printed past the longest bar is not clipped.
+        fig.update_xaxes(range=[0, (max(summary["decisions"].values()) or 1) * 1.15])
         show(fig)
 
     head, button = st.columns([3, 1], vertical_alignment="bottom")

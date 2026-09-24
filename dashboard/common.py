@@ -18,10 +18,11 @@ MUTED = "#6b7280"
 RISK_UP = "#e5484d"
 RISK_DOWN = "#30a46c"
 
+# `short` fits a narrow metric card, where "Manual review" gets cut off.
 DECISION = {
-    "APPROVE": {"label": "Approve", "icon": "✅", "color": "#30a46c"},
-    "REVIEW": {"label": "Manual review", "icon": "⚠️", "color": "#f5a623"},
-    "DECLINE": {"label": "Decline", "icon": "⛔", "color": "#e5484d"},
+    "APPROVE": {"label": "Approve", "short": "Approve", "icon": "✅", "color": "#30a46c"},
+    "REVIEW": {"label": "Manual review", "short": "Review", "icon": "⚠️", "color": "#f5a623"},
+    "DECLINE": {"label": "Decline", "short": "Decline", "icon": "⛔", "color": "#e5484d"},
 }
 BAND_COLOR = {"good": "#30a46c", "warning": "#f5a623", "serious": "#f76b15", "critical": "#e5484d"}
 
@@ -103,6 +104,10 @@ def figure(height: int = 360, **layout) -> go.Figure:
 
 
 def show(fig: go.Figure) -> None:
+    # A Plotly title shares the top margin with the legend and overlaps it, so it is drawn above the chart instead.
+    if fig.layout.title.text:
+        st.markdown(f"**{fig.layout.title.text}**")
+        fig.layout.title = None  # drop the whole object: an empty one is drawn as "undefined"
     st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
 
 

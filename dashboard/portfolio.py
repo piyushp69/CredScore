@@ -24,13 +24,14 @@ def render() -> None:
 
     cols = st.columns(6)
     cols[0].metric("Applications", num(kpis["applicants"]))
-    cols[1].metric("Default rate", pct(base_rate, 2), f"{num(kpis['defaults'])} with payment difficulties",
-                   delta_color="off", delta_arrow="off")
+    # Delta chips stay short (six columns cut long ones off); the detail goes in the tooltip.
+    cols[1].metric("Default rate", pct(base_rate, 2), f"{num(kpis['defaults'])} defaults",
+                   delta_color="off", delta_arrow="off", help="Applications with payment difficulties.")
     cols[2].metric("Median income", num(kpis["median_income"]))
     cols[3].metric("Median credit", num(kpis["median_credit"]))
     cols[4].metric("Median age", f"{kpis['median_age']} yrs")
-    cols[5].metric("Bureau history", pct(kpis["share_with_bureau_history"], 0), "share with a bureau record",
-                   delta_color="off", delta_arrow="off")
+    cols[5].metric("Bureau history", pct(kpis["share_with_bureau_history"], 0),
+                   help="Share of applicants with a loan reported to the credit bureau.")
 
     by_key = {s["key"]: s for s in segments}
     pick, note = st.columns([1, 2], vertical_alignment="bottom")
@@ -55,7 +56,8 @@ def render() -> None:
                           "(%{customdata[1]:.1%})<extra></extra>",
         ))
         fig.add_vline(x=base_rate, line_dash="dot", line_color=MUTED)
-        fig.update_xaxes(tickformat=".0%", rangemode="tozero")
+        # Headroom so the labels printed past the longest bars are not clipped.
+        fig.update_xaxes(tickformat=".0%", range=[0, (max(rates) or 0.01) * 1.18])
         show(fig)
         st.caption(f"Dotted line: portfolio average of {pct(base_rate)}. Extremes are labelled; hover for the rest.")
     with right:

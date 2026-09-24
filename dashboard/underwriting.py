@@ -142,13 +142,14 @@ def render() -> None:
         _load_profile(st.session_state.get("uw_inputs", defaults))
 
     presets = {"Typical applicant": defaults, "Strong applicant": STRONG, "Risky applicant": RISKY}
-    cols = st.columns([1.2, 1, 1, 1, 2], vertical_alignment="center")
-    cols[0].caption("Start from an example")
-    for col, (name, preset) in zip(cols[1:], presets.items()):
-        if col.button(name, width="stretch"):
-            _load_profile(preset)
-            st.session_state.pop("uw_scored", None)
-            st.rerun()
+    # A wrapping row keeps each button as wide as its label; fixed columns cut the labels off on narrow screens.
+    with st.container(horizontal=True, vertical_alignment="center"):
+        st.caption("Start from an example", width="content")
+        for name, preset in presets.items():
+            if st.button(name):
+                _load_profile(preset)
+                st.session_state.pop("uw_scored", None)
+                st.rerun()
 
     with st.form("applicant"):
         values = {}
@@ -233,7 +234,7 @@ def _result(service, info: dict, profile: dict, result: dict) -> None:
         if base_rate:
             st.caption(f"{result['probability_of_default'] / base_rate:.1f}× the portfolio average of {pct(base_rate)}")
     with c3:
-        st.metric("Recommended decision", f"{decision['icon']} {decision['label']}")
+        st.metric("Recommended decision", f"{decision['icon']} {decision['short']}")
         st.caption(result["decision_reason"])
 
     show(_score_scale(result["credit_score"], bands))
