@@ -50,6 +50,9 @@ and a per-feature explanation of how that score was reached.
 
 ## Screenshots
 
+Captured from the live app at [credscorelive.streamlit.app](https://credscorelive.streamlit.app); the REST API docs
+come from a local run, since the API is not deployed there.
+
 ### Underwriting
 
 Score one applicant from a form (or start from a typical, strong or risky example), see why the model decided
