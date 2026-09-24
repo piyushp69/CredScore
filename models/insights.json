@@ -1,0 +1,640 @@
+{
+  "generated_at": "2026-09-22T17:29:26+00:00",
+  "kpis": {
+    "applicants": 307511,
+    "defaults": 24825,
+    "default_rate": 0.08073,
+    "median_income": 147150.0,
+    "median_credit": 513531.0,
+    "median_annuity": 24903.0,
+    "median_age": 43.1,
+    "share_with_bureau_history": 0.8569,
+    "share_repeat_clients": 0.9465
+  },
+  "segments": [
+    {
+      "key": "income",
+      "title": "Annual income",
+      "description": "Total annual income of the applicant.",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "Under 100k",
+          "applicants": 63698,
+          "share": 0.20714,
+          "default_rate": 0.08203
+        },
+        {
+          "segment": "100k-150k",
+          "applicants": 91591,
+          "share": 0.29785,
+          "default_rate": 0.08619
+        },
+        {
+          "segment": "150k-200k",
+          "applicants": 64307,
+          "share": 0.20912,
+          "default_rate": 0.08447
+        },
+        {
+          "segment": "200k-300k",
+          "applicants": 65176,
+          "share": 0.21195,
+          "default_rate": 0.0755
+        },
+        {
+          "segment": "300k or more",
+          "applicants": 22739,
+          "share": 0.07395,
+          "default_rate": 0.0595
+        }
+      ]
+    },
+    {
+      "key": "age",
+      "title": "Age",
+      "description": "Applicant age at application.",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "Under 30",
+          "applicants": 45186,
+          "share": 0.14694,
+          "default_rate": 0.11444
+        },
+        {
+          "segment": "30-39",
+          "applicants": 82331,
+          "share": 0.26773,
+          "default_rate": 0.09592
+        },
+        {
+          "segment": "40-49",
+          "applicants": 76599,
+          "share": 0.24909,
+          "default_rate": 0.07641
+        },
+        {
+          "segment": "50-59",
+          "applicants": 68094,
+          "share": 0.22144,
+          "default_rate": 0.06121
+        },
+        {
+          "segment": "60+",
+          "applicants": 35301,
+          "share": 0.1148,
+          "default_rate": 0.04918
+        }
+      ]
+    },
+    {
+      "key": "employment",
+      "title": "Years in current job",
+      "description": "Pensioners and unemployed applicants are shown as 'Not employed'.",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "Not employed",
+          "applicants": 55374,
+          "share": 0.18007,
+          "default_rate": 0.054
+        },
+        {
+          "segment": "Under 1",
+          "applicants": 27982,
+          "share": 0.091,
+          "default_rate": 0.10971
+        },
+        {
+          "segment": "1-3",
+          "applicants": 61472,
+          "share": 0.1999,
+          "default_rate": 0.11073
+        },
+        {
+          "segment": "3-5",
+          "applicants": 46902,
+          "share": 0.15252,
+          "default_rate": 0.09671
+        },
+        {
+          "segment": "5-10",
+          "applicants": 64871,
+          "share": 0.21096,
+          "default_rate": 0.07372
+        },
+        {
+          "segment": "10 or more",
+          "applicants": 50910,
+          "share": 0.16556,
+          "default_rate": 0.05186
+        }
+      ]
+    },
+    {
+      "key": "ext_score",
+      "title": "External score (average)",
+      "description": "Average of the three external credit scores, split into quintiles.",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "Not available",
+          "applicants": 172,
+          "share": 0.00056,
+          "default_rate": 0.0814
+        },
+        {
+          "segment": "Q1 (lowest)",
+          "applicants": 61468,
+          "share": 0.19989,
+          "default_rate": 0.18724
+        },
+        {
+          "segment": "Q2",
+          "applicants": 61469,
+          "share": 0.19989,
+          "default_rate": 0.09309
+        },
+        {
+          "segment": "Q3",
+          "applicants": 61466,
+          "share": 0.19988,
+          "default_rate": 0.05907
+        },
+        {
+          "segment": "Q4",
+          "applicants": 61468,
+          "share": 0.19989,
+          "default_rate": 0.03945
+        },
+        {
+          "segment": "Q5 (highest)",
+          "applicants": 61468,
+          "share": 0.19989,
+          "default_rate": 0.02479
+        }
+      ]
+    },
+    {
+      "key": "credit_income",
+      "title": "Credit-to-income ratio",
+      "description": "Requested credit divided by annual income.",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "Under 2x",
+          "applicants": 71036,
+          "share": 0.231,
+          "default_rate": 0.07485
+        },
+        {
+          "segment": "2-3x",
+          "applicants": 66240,
+          "share": 0.21541,
+          "default_rate": 0.08699
+        },
+        {
+          "segment": "3-4x",
+          "applicants": 50380,
+          "share": 0.16383,
+          "default_rate": 0.08855
+        },
+        {
+          "segment": "4-6x",
+          "applicants": 63756,
+          "share": 0.20733,
+          "default_rate": 0.082
+        },
+        {
+          "segment": "6x or more",
+          "applicants": 56099,
+          "share": 0.18243,
+          "default_rate": 0.07232
+        }
+      ]
+    },
+    {
+      "key": "education",
+      "title": "Education",
+      "description": "Highest education reached.",
+      "ordered": false,
+      "rows": [
+        {
+          "segment": "Secondary / secondary special",
+          "applicants": 218391,
+          "share": 0.71019,
+          "default_rate": 0.0894
+        },
+        {
+          "segment": "Higher education",
+          "applicants": 74863,
+          "share": 0.24345,
+          "default_rate": 0.05355
+        },
+        {
+          "segment": "Incomplete higher",
+          "applicants": 10277,
+          "share": 0.03342,
+          "default_rate": 0.08485
+        },
+        {
+          "segment": "Lower secondary",
+          "applicants": 3816,
+          "share": 0.01241,
+          "default_rate": 0.10928
+        },
+        {
+          "segment": "Academic degree",
+          "applicants": 164,
+          "share": 0.00053,
+          "default_rate": 0.01829
+        }
+      ]
+    },
+    {
+      "key": "income_type",
+      "title": "Income type",
+      "description": "Main source of income.",
+      "ordered": false,
+      "rows": [
+        {
+          "segment": "Working",
+          "applicants": 158774,
+          "share": 0.51632,
+          "default_rate": 0.09588
+        },
+        {
+          "segment": "Commercial associate",
+          "applicants": 71617,
+          "share": 0.23289,
+          "default_rate": 0.07484
+        },
+        {
+          "segment": "Pensioner",
+          "applicants": 55362,
+          "share": 0.18003,
+          "default_rate": 0.05386
+        },
+        {
+          "segment": "State servant",
+          "applicants": 21703,
+          "share": 0.07058,
+          "default_rate": 0.05755
+        },
+        {
+          "segment": "Unemployed",
+          "applicants": 22,
+          "share": 7e-05,
+          "default_rate": 0.36364
+        },
+        {
+          "segment": "Student",
+          "applicants": 18,
+          "share": 6e-05,
+          "default_rate": 0.0
+        },
+        {
+          "segment": "Other",
+          "applicants": 15,
+          "share": 5e-05,
+          "default_rate": 0.13333
+        }
+      ]
+    },
+    {
+      "key": "family",
+      "title": "Family status",
+      "description": "Marital / family status.",
+      "ordered": false,
+      "rows": [
+        {
+          "segment": "Married",
+          "applicants": 196432,
+          "share": 0.63878,
+          "default_rate": 0.0756
+        },
+        {
+          "segment": "Single / not married",
+          "applicants": 45444,
+          "share": 0.14778,
+          "default_rate": 0.09808
+        },
+        {
+          "segment": "Civil marriage",
+          "applicants": 29775,
+          "share": 0.09683,
+          "default_rate": 0.09945
+        },
+        {
+          "segment": "Separated",
+          "applicants": 19770,
+          "share": 0.06429,
+          "default_rate": 0.08194
+        },
+        {
+          "segment": "Widow",
+          "applicants": 16088,
+          "share": 0.05232,
+          "default_rate": 0.05824
+        },
+        {
+          "segment": "Other",
+          "applicants": 2,
+          "share": 1e-05,
+          "default_rate": 0.0
+        }
+      ]
+    },
+    {
+      "key": "housing",
+      "title": "Housing situation",
+      "description": "Current housing arrangement.",
+      "ordered": false,
+      "rows": [
+        {
+          "segment": "House / apartment",
+          "applicants": 272868,
+          "share": 0.88734,
+          "default_rate": 0.07796
+        },
+        {
+          "segment": "With parents",
+          "applicants": 14840,
+          "share": 0.04826,
+          "default_rate": 0.11698
+        },
+        {
+          "segment": "Municipal apartment",
+          "applicants": 11183,
+          "share": 0.03637,
+          "default_rate": 0.0854
+        },
+        {
+          "segment": "Rented apartment",
+          "applicants": 4881,
+          "share": 0.01587,
+          "default_rate": 0.12313
+        },
+        {
+          "segment": "Office apartment",
+          "applicants": 2617,
+          "share": 0.00851,
+          "default_rate": 0.06572
+        },
+        {
+          "segment": "Co-op apartment",
+          "applicants": 1122,
+          "share": 0.00365,
+          "default_rate": 0.07932
+        }
+      ]
+    },
+    {
+      "key": "occupation",
+      "title": "Occupation",
+      "description": "Top occupations; the rest are grouped.",
+      "ordered": false,
+      "rows": [
+        {
+          "segment": "Not stated",
+          "applicants": 96391,
+          "share": 0.31346,
+          "default_rate": 0.06513
+        },
+        {
+          "segment": "Laborers",
+          "applicants": 55186,
+          "share": 0.17946,
+          "default_rate": 0.10579
+        },
+        {
+          "segment": "Sales staff",
+          "applicants": 32102,
+          "share": 0.10439,
+          "default_rate": 0.09632
+        },
+        {
+          "segment": "Core staff",
+          "applicants": 27570,
+          "share": 0.08966,
+          "default_rate": 0.06304
+        },
+        {
+          "segment": "Managers",
+          "applicants": 21371,
+          "share": 0.0695,
+          "default_rate": 0.06214
+        },
+        {
+          "segment": "Drivers",
+          "applicants": 18603,
+          "share": 0.0605,
+          "default_rate": 0.11326
+        },
+        {
+          "segment": "High skill tech staff",
+          "applicants": 11380,
+          "share": 0.03701,
+          "default_rate": 0.0616
+        },
+        {
+          "segment": "Accountants",
+          "applicants": 9813,
+          "share": 0.03191,
+          "default_rate": 0.0483
+        },
+        {
+          "segment": "Medicine staff",
+          "applicants": 8537,
+          "share": 0.02776,
+          "default_rate": 0.067
+        },
+        {
+          "segment": "Security staff",
+          "applicants": 6721,
+          "share": 0.02186,
+          "default_rate": 0.10742
+        },
+        {
+          "segment": "Cooking staff",
+          "applicants": 5946,
+          "share": 0.01934,
+          "default_rate": 0.10444
+        },
+        {
+          "segment": "Cleaning staff",
+          "applicants": 4653,
+          "share": 0.01513,
+          "default_rate": 0.09607
+        },
+        {
+          "segment": "Other",
+          "applicants": 9238,
+          "share": 0.03004,
+          "default_rate": 0.09818
+        }
+      ]
+    },
+    {
+      "key": "contract",
+      "title": "Contract type",
+      "description": "Cash loan or revolving credit.",
+      "ordered": false,
+      "rows": [
+        {
+          "segment": "Cash loans",
+          "applicants": 278232,
+          "share": 0.90479,
+          "default_rate": 0.08346
+        },
+        {
+          "segment": "Revolving loans",
+          "applicants": 29279,
+          "share": 0.09521,
+          "default_rate": 0.05478
+        }
+      ]
+    },
+    {
+      "key": "region",
+      "title": "Region rating",
+      "description": "Home Credit's rating of the applicant's region (1 is best).",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "Rating 1",
+          "applicants": 32197,
+          "share": 0.1047,
+          "default_rate": 0.0482
+        },
+        {
+          "segment": "Rating 2",
+          "applicants": 226984,
+          "share": 0.73813,
+          "default_rate": 0.07889
+        },
+        {
+          "segment": "Rating 3",
+          "applicants": 48330,
+          "share": 0.15717,
+          "default_rate": 0.11103
+        }
+      ]
+    },
+    {
+      "key": "bureau",
+      "title": "Credit bureau loans",
+      "description": "Loans with other lenders reported to the credit bureau.",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "No history",
+          "applicants": 44020,
+          "share": 0.14315,
+          "default_rate": 0.10125
+        },
+        {
+          "segment": "1-2",
+          "applicants": 71707,
+          "share": 0.23319,
+          "default_rate": 0.08203
+        },
+        {
+          "segment": "3-5",
+          "applicants": 86883,
+          "share": 0.28254,
+          "default_rate": 0.07401
+        },
+        {
+          "segment": "6-10",
+          "applicants": 72624,
+          "share": 0.23617,
+          "default_rate": 0.07456
+        },
+        {
+          "segment": "11 or more",
+          "applicants": 32277,
+          "share": 0.10496,
+          "default_rate": 0.08182
+        }
+      ]
+    },
+    {
+      "key": "late_payments",
+      "title": "Late installment share",
+      "description": "Share of previous Home Credit installments paid after the due date.",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "No history",
+          "applicants": 15876,
+          "share": 0.05163,
+          "default_rate": 0.05984
+        },
+        {
+          "segment": "Never late",
+          "applicants": 136636,
+          "share": 0.44433,
+          "default_rate": 0.06801
+        },
+        {
+          "segment": "Under 5%",
+          "applicants": 38976,
+          "share": 0.12675,
+          "default_rate": 0.06925
+        },
+        {
+          "segment": "5-15%",
+          "applicants": 60022,
+          "share": 0.19519,
+          "default_rate": 0.0914
+        },
+        {
+          "segment": "15% or more",
+          "applicants": 56001,
+          "share": 0.18211,
+          "default_rate": 0.11425
+        }
+      ]
+    },
+    {
+      "key": "refusals",
+      "title": "Previous refusals",
+      "description": "Previous Home Credit applications that were refused.",
+      "ordered": true,
+      "rows": [
+        {
+          "segment": "New client",
+          "applicants": 16454,
+          "share": 0.05351,
+          "default_rate": 0.05956
+        },
+        {
+          "segment": "None",
+          "applicants": 190763,
+          "share": 0.62035,
+          "default_rate": 0.07073
+        },
+        {
+          "segment": "1",
+          "applicants": 46534,
+          "share": 0.15132,
+          "default_rate": 0.08834
+        },
+        {
+          "segment": "2-3",
+          "applicants": 34598,
+          "share": 0.11251,
+          "default_rate": 0.10648
+        },
+        {
+          "segment": "4 or more",
+          "applicants": 19162,
+          "share": 0.06231,
+          "default_rate": 0.13344
+        }
+      ]
+    }
+  ]
+}

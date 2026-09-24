@@ -42,7 +42,8 @@ The decision policy derived from the validation set approves the safest 70% and 
 ```bash
 pip install -r requirements.txt
 
-# 1. Data + model (downloads ~1.5 GB from Kaggle if dataset/ is empty)
+# 1. (optional) Retrain: a trained bundle is committed in models/.
+#    Downloads ~1.5 GB from Kaggle if dataset/ is empty.
 python -m credscore.pipeline all          # ~2 minutes with a GPU, ~10 on CPU
 
 # 2. Dashboard -> http://localhost:8501
@@ -139,6 +140,8 @@ credscore/           core package (shared by pipeline and API)
   pipeline/          download -> features -> train -> insights (python -m credscore.pipeline)
 backend/             FastAPI service (app factory, schemas)
 streamlit_app.py     dashboard entrypoint: navigation, model status
+frontend/
+  dashboard.py       Streamlit Cloud entrypoint (the deployed URL uses it); runs streamlit_app.py
 dashboard/           Streamlit pages
   common.py          model loading, formatting, chart styling, example applicants
   underwriting.py    · batch.py · portfolio.py · performance.py
@@ -148,7 +151,7 @@ tests/               pytest suite incl. synthetic-data pipeline fixture
 ## Tests
 
 ```bash
-python -m pytest            # 49 tests, ~25 s
+python -m pytest            # 50 tests, ~20 s
 ```
 
 The suite builds a synthetic Home Credit-shaped dataset, runs the real pipeline CLI over it, then exercises the API and every dashboard page (headlessly, via Streamlit's `AppTest`) against that model — so it needs neither the 1.5 GB dataset nor a trained model.
