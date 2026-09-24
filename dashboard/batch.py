@@ -17,6 +17,8 @@ BIN = 20
 def _read_csv(data: bytes) -> list[dict]:
     # applicant_id stays text ("007" must not become 7); "utf-8-sig" drops Excel's BOM.
     frame = pd.read_csv(io.BytesIO(data), dtype={"applicant_id": str}, encoding="utf-8-sig", skipinitialspace=True)
+    if frame.empty:
+        raise ValueError("the file has no applicant rows")
     frame.columns = [str(c).strip() for c in frame.columns]
     return frame.replace({np.nan: None}).to_dict(orient="records")
 

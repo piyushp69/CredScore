@@ -7,7 +7,7 @@ xgboost>=2.1
 pydantic>=2.6
 fastapi>=0.110
 uvicorn>=0.29
-streamlit>=1.50
+streamlit>=1.52  # st.metric(delta_arrow=...)
 plotly>=5.24
 
 # Dataset download from Kaggle (optional if the CSVs are already in dataset/)

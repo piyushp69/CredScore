@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from .common import (
-    BLUE, DECISION, ORANGE, dec, diagonal, figure, num, page_header, pct, require_service, show,
+    BLUE, DECISION, ORANGE, dec, diagonal, figure, num, page_header, pct, require_service, show, targets_note,
 )
 
 PCT_COL = st.column_config.NumberColumn(format="percent")
@@ -47,7 +47,7 @@ def render() -> None:
     with tabs[1]:
         _calibration(report)
     with tabs[2]:
-        _policy(report, info["policy"])
+        _policy(report, info)
     with tabs[3]:
         _explainability(report, info)
     with tabs[4]:
@@ -122,10 +122,15 @@ def _calibration(report: dict) -> None:
         )
 
 
-def _policy(report: dict, policy: dict) -> None:
-    st.info(f"Applicants with PD below **{pct(policy['approve_below'])}** are approved, those at or above "
-            f"**{pct(policy['decline_at'])}** are declined, and everyone in between goes to manual review. "
-            "The cut-offs were set on the validation set to approve about 70% and decline the riskiest 10%.")
+def _policy(report: dict, info: dict) -> None:
+    # The outcomes were measured at the trained cut-offs; live scoring may override them via the environment.
+    cutoffs, live = report["policy"]["cutoffs"], info["policy"]
+    st.info(f"Applicants with PD below **{pct(cutoffs['approve_below'])}** are approved, those at or above "
+            f"**{pct(cutoffs['decline_at'])}** are declined, and everyone in between goes to manual review. "
+            + targets_note(info))
+    if live != cutoffs:
+        st.warning(f"Live scoring uses overridden cut-offs (approve below {pct(live['approve_below'])}, decline at "
+                   f"{pct(live['decline_at'])} or above). The outcomes below are for the trained cut-offs.")
 
     cols = st.columns(len(report["policy"]["outcomes"]), border=True)
     for col, row in zip(cols, report["policy"]["outcomes"]):

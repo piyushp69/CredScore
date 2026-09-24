@@ -68,6 +68,15 @@ def dec(v, digits: int = 3) -> str:
     return "—" if v is None else f"{v:.{digits}f}"
 
 
+def targets_note(info: dict) -> str:
+    """How training chose the decision cut-offs, from the approval targets stored in the bundle."""
+    targets = info.get("policy_targets")
+    if not targets:
+        return ""
+    return (f"Cut-offs were set on the validation set to approve about {pct(targets['approve_rate'], 0)} "
+            f"and decline the riskiest {pct(targets['decline_rate'], 0)}.")
+
+
 def page_header(title: str, caption: str) -> None:
     st.title(title)
     st.caption(caption)

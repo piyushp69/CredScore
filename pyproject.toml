@@ -17,7 +17,7 @@ dependencies = [
     "pydantic>=2.6",
     "fastapi>=0.110",
     "uvicorn>=0.29",
-    "streamlit>=1.50",
+    "streamlit>=1.52",
     "plotly>=5.24",
 ]
 
