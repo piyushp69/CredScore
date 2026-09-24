@@ -148,7 +148,7 @@ tests/               pytest suite incl. synthetic-data pipeline fixture
 ## Tests
 
 ```bash
-python -m pytest            # 43 tests, ~15 s
+python -m pytest            # 49 tests, ~25 s
 ```
 
 The suite builds a synthetic Home Credit-shaped dataset, runs the real pipeline CLI over it, then exercises the API and every dashboard page (headlessly, via Streamlit's `AppTest`) against that model — so it needs neither the 1.5 GB dataset nor a trained model.

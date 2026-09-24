@@ -142,9 +142,10 @@ def create_app() -> FastAPI:
         description="Credit default risk scoring with explanations, trained on the Home Credit dataset.",
         lifespan=lifespan,
     )
+    origins = os.environ.get("CREDSCORE_CORS_ORIGINS", "*").split(",")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=os.environ.get("CREDSCORE_CORS_ORIGINS", "*").split(","),
+        allow_origins=[origin.strip() for origin in origins if origin.strip()],  # tolerate "a, b"
         allow_methods=["*"],
         allow_headers=["*"],
     )

@@ -91,3 +91,13 @@ def test_api_without_model_degrades_gracefully(tmp_path, monkeypatch):
         assert health["status"] == "degraded" and not health["model_loaded"]
         response = client.post("/api/v1/score", json=EXAMPLE_PROFILE)
         assert response.status_code == 503 and "credscore.pipeline" in response.json()["detail"]
+
+
+def test_cors_allow_list_tolerates_spaces(monkeypatch):
+    from backend.app import create_app
+
+    monkeypatch.setenv("CREDSCORE_CORS_ORIGINS", "http://a.example, http://b.example")
+    client = TestClient(create_app())
+    for origin in ("http://a.example", "http://b.example"):
+        preflight = client.options("/api/v1/health", headers={"Origin": origin, "Access-Control-Request-Method": "GET"})
+        assert preflight.headers.get("access-control-allow-origin") == origin

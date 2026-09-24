@@ -14,7 +14,7 @@ from credscore.profile import ApplicantProfile
 
 from .common import (
     BAND_COLOR, BLUE, DECISION, MUTED, RISK_DOWN, RISK_UP, RISKY, STRONG, figure, num, page_header, pct,
-    require_service, show,
+    require_service, show, targets_note,
 )
 
 # (key, label, kind, options). Kinds: num | int | optional | optional_int | select | optional_select | toggle
@@ -103,6 +103,8 @@ def _widget_value(kind: str, value):
 def _load_profile(profile: dict) -> None:
     for key, (_, kind, _) in FIELDS.items():
         st.session_state[f"uw_{key}"] = _widget_value(kind, profile.get(key))
+    # Streamlit discards widget state while another page is shown; this copy outlives it.
+    st.session_state["uw_inputs"] = dict(profile)
 
 
 def _field(key: str, options: dict[str, list[str]]):
@@ -121,8 +123,10 @@ def _field(key: str, options: dict[str, list[str]]):
     step = 1 if kind in ("int", "optional_int") else opts.get("step")
     fmt = "%d" if kind in ("int", "optional_int") else None
     kwargs = {k: v for k, v in opts.items() if k != "step"}
-    return st.number_input(label, key=state_key, step=step, format=fmt,
-                           placeholder="not provided" if kind.startswith("optional") else None, **kwargs)
+    if kind.startswith("optional"):
+        # value=None makes the input clearable; without it an emptied field snaps back to min_value.
+        kwargs |= {"value": None, "placeholder": "not provided"}
+    return st.number_input(label, key=state_key, step=step, format=fmt, **kwargs)
 
 
 def render() -> None:
@@ -134,7 +138,8 @@ def render() -> None:
                 "Score a loan applicant, see why the model decided what it did, and test what would change it.")
 
     if "uw_age_years" not in st.session_state:
-        _load_profile(defaults)
+        # First visit, or the form's widget state was discarded while another page was open.
+        _load_profile(st.session_state.get("uw_inputs", defaults))
 
     presets = {"Typical applicant": defaults, "Strong applicant": STRONG, "Risky applicant": RISKY}
     cols = st.columns([1.2, 1, 1, 1, 2], vertical_alignment="center")
@@ -156,6 +161,7 @@ def render() -> None:
         submitted = st.form_submit_button("⚡ Score applicant", type="primary", width="stretch")
 
     if submitted:
+        st.session_state["uw_inputs"] = values
         _score(service, values)
 
     scored = st.session_state.get("uw_scored")
@@ -269,9 +275,11 @@ def _result(service, info: dict, profile: dict, result: dict) -> None:
                                mime="application/json")
         with st.container(border=True):
             st.subheader("Decision policy")
-            policy = info["policy"]
+            policy, trained = info["policy"], service.model.metadata["policy"]
+            overridden = any(policy[k] != trained[k] for k in policy)
+            note = "Set with CREDSCORE_APPROVE_PD / CREDSCORE_DECLINE_PD." if overridden else targets_note(info)
             st.caption(f"Approve below {pct(policy['approve_below'])} · decline at {pct(policy['decline_at'])} or above. "
-                       "Cut-offs were set on the validation set to approve about 70% and decline the riskiest 10%.")
+                       + note)
 
     _what_if(service, profile, info["policy"])
 
@@ -291,11 +299,10 @@ def _what_if(service, profile: dict, policy: dict) -> None:
     head, pick = st.columns([3, 2], vertical_alignment="bottom")
     head.caption("Vary one input, keep everything else fixed, and watch the probability of default respond.")
     field = pick.selectbox("Input to vary", choices, format_func=lambda f: WHAT_IF[f][0], key="uw_whatif")
-    label, span = WHAT_IF[field]
+    label = WHAT_IF[field][0]
 
-    current = float(profile.get(field) or 0)
-    lo, hi = span(current)
-    values = [round(lo + (hi - lo) * i / 24, 3) for i in range(25)]
+    current = profile.get(field)  # None when not provided: there is no current point to mark
+    values = _sweep(field, current)
     response = service.score_batch([{**profile, field: v} for v in values], n_reasons=0)
     curve = pd.DataFrame({
         label: values,
@@ -310,11 +317,23 @@ def _what_if(service, profile: dict, policy: dict) -> None:
                   annotation_text=f"Approve below {pct(policy['approve_below'])}", annotation_position="bottom right")
     fig.add_hline(y=policy["decline_at"], line_dash="dash", line_color=MUTED,
                   annotation_text=f"Decline at {pct(policy['decline_at'])}", annotation_position="top right")
-    fig.add_vline(x=current, line_color="rgba(200,200,200,0.6)", annotation_text="current", annotation_position="top")
+    if current is not None:
+        fig.add_vline(x=current, line_color="rgba(200,200,200,0.6)", annotation_text="current",
+                      annotation_position="top")
     fig.update_layout(title=f"Probability of default vs {label.lower()}", showlegend=False)
     fig.update_xaxes(title=label)
     fig.update_yaxes(tickformat=".0%", rangemode="tozero")
     show(fig)
+    if current is None:
+        st.caption(f"{label} is not provided for this applicant, so the curve has no current point.")
     with st.expander("View as table"):
         st.dataframe(curve, hide_index=True, column_config={
             "Probability of default": st.column_config.NumberColumn(format="percent")})
+
+
+def _sweep(field: str, current: float | None) -> list[float]:
+    """25 evenly spaced values to try for a what-if input, spanning the applicant's own value."""
+    lo, hi = WHAT_IF[field][1](float(current or 0))
+    if current is not None:
+        lo, hi = min(lo, current), max(hi, current)
+    return [round(lo + (hi - lo) * i / 24, 3) for i in range(25)]
