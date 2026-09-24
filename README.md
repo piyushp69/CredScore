@@ -7,7 +7,7 @@
 Every applicant gets a probability of default, a 300–850 credit score, a risk band, a recommended decision
 and a per-feature explanation of how that score was reached.
 
-[![Open the live app](https://img.shields.io/badge/Open%20the%20live%20app-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://credscore.streamlit.app)
+[![Open the live app](https://img.shields.io/badge/Open%20the%20live%20app-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://credscorelive.streamlit.app)
 [![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in%20Codespaces-24292F?style=for-the-badge&logo=github&logoColor=white)](https://codespaces.new/piyushp69/CredScore?quickstart=1)
 
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
@@ -16,8 +16,8 @@ and a per-feature explanation of how that score was reached.
 ![XGBoost](https://img.shields.io/badge/XGBoost-3.x-EB5B2D)
 ![ROC AUC 0.784](https://img.shields.io/badge/ROC%20AUC-0.784-2EA44F)
 
-**[Live demo](https://credscore.streamlit.app)** · [Links](#links) · [Screenshots](#screenshots) · [Results](#results) ·
-[Quick start](#quick-start) · [REST API](#rest-api) · [How it works](#how-it-works)
+**[Live demo](https://credscorelive.streamlit.app)** · [Links](#links) · [Screenshots](#screenshots) · [Results](#results) ·
+[Model card](#model-card) · [Quick start](#quick-start) · [REST API](#rest-api) · [How it works](#how-it-works)
 
 </div>
 
@@ -38,9 +38,9 @@ and a per-feature explanation of how that score was reached.
 
 ## Links
 
-- 🌐 **Live dashboard:** [credscore.streamlit.app](https://credscore.streamlit.app)
-- 📄 **Pages:** [Underwriting](https://credscore.streamlit.app) · [Batch scoring](https://credscore.streamlit.app/batch) ·
-  [Portfolio insights](https://credscore.streamlit.app/portfolio) · [Model performance](https://credscore.streamlit.app/performance)
+- 🌐 **Live dashboard:** [credscorelive.streamlit.app](https://credscorelive.streamlit.app)
+- 📄 **Pages:** [Underwriting](https://credscorelive.streamlit.app) · [Batch scoring](https://credscorelive.streamlit.app/batch) ·
+  [Portfolio insights](https://credscorelive.streamlit.app/portfolio) · [Model performance](https://credscorelive.streamlit.app/performance)
 - 💻 **Source code:** [github.com/piyushp69/CredScore](https://github.com/piyushp69/CredScore)
 - ☁️ **Try it in your browser:** [Open in GitHub Codespaces](https://codespaces.new/piyushp69/CredScore?quickstart=1)
 - 🗂️ **Dataset:** [Home Credit Default Risk on Kaggle](https://www.kaggle.com/competitions/home-credit-default-risk)
@@ -163,6 +163,36 @@ riskiest 10% (PD of 18.9% or more):
 | Approve (70.1%) | 3.6% | 31.1% |
 | Manual review (19.8%) | 12.9% | 31.7% |
 | Decline (10.1%) | 29.8% | 37.2% |
+
+## Model card
+
+- **Data** — the [Home Credit Default Risk](https://www.kaggle.com/competitions/home-credit-default-risk) dataset:
+  307,511 labelled loan applications, of which 24,825 (8.07%) ran into payment difficulties. Four tables are used:
+  `application_train`, `bureau`, `previous_application` and `installments_payments`.
+- **Split** — 70 / 15 / 15, stratified: 215,257 applications to train, 46,127 to validate (early stopping and the
+  decision cut-offs) and 46,127 to test.
+- **Features** — 113 model inputs: 69 application fields, 29 per-applicant aggregates of the bureau,
+  previous-application and installment tables, and 15 derived ratios such as credit-to-income and payment rate.
+  12 categorical fields use XGBoost's native categorical splits; gender is excluded.
+- **Model** — XGBoost 3.4.1 gradient-boosted trees (binary logistic objective, learning rate 0.03, max depth 6,
+  min child weight 30, 80% row and 50% column subsampling, L2 penalty 5). Early stopping picked 1,115 trees;
+  training took 44 s on a GPU.
+- **Accuracy** — ROC AUC 0.884 on train, 0.780 on validation and 0.784 on test; test Brier score 0.0662 and log
+  loss 0.238. The most influential inputs are the average external score, payment rate, credit-to-goods-price
+  ratio, employer type and loan annuity.
+- **Score** — 650 points at 20:1 good:bad odds, 40 more points per doubling of the odds, clipped to 300–850.
+- **Decision policy** — approve below a probability of default of 8.4%, decline at 18.9% or above, manual review in
+  between (see [Results](#results)).
+
+Risk bands, with the default rate observed in each on the test set:
+
+| Band | Credit score | Default rate |
+|---|---|---|
+| A — very low risk | 720–850 | 0.9% |
+| B — low risk | 660–719 | 2.7% |
+| C — moderate risk | 600–659 | 7.0% |
+| D — high risk | 540–599 | 16.7% |
+| E — very high risk | 300–539 | 35.2% |
 
 ## Quick start
 
@@ -296,7 +326,7 @@ credscore/             core package (shared by pipeline, dashboard and API)
 backend/               FastAPI service (app factory, schemas)
 streamlit_app.py       dashboard entrypoint: navigation, model status
 frontend/
-  dashboard.py         Streamlit Cloud entrypoint (the deployed URL uses it); runs streamlit_app.py
+  dashboard.py         alternative entrypoint kept for the Streamlit Cloud deployment; runs streamlit_app.py
 dashboard/             Streamlit pages
   common.py            model loading, formatting, chart styling, example applicants
   underwriting.py      · batch.py · portfolio.py · performance.py
@@ -307,9 +337,10 @@ tests/                 pytest suite incl. synthetic-data pipeline fixture
 
 ## Deployment
 
-- **[Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud)** — the live app runs
-  `frontend/dashboard.py` from the `main` branch on Python 3.10+, installing `requirements.txt`. The trained bundle
-  in `models/` is committed, so no training happens on the server.
+- **[Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud)** — the live app at
+  [credscorelive.streamlit.app](https://credscorelive.streamlit.app) deploys from the `main` branch on Python 3.10+,
+  installing `requirements.txt`. Either `streamlit_app.py` or `frontend/dashboard.py` (a thin wrapper around it)
+  works as the main file. The trained bundle in `models/` is committed, so no training happens on the server.
 - **Docker** — `docker compose up --build` serves the dashboard on 8501 and the API on 8000 from one image, with
   `./models` mounted read-only.
 - **GitHub Codespaces** — the dev container in `.devcontainer/` installs the requirements and starts the dashboard.
