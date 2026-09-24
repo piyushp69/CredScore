@@ -1,9 +1,6 @@
 """Request / response models for the public API (also drive the OpenAPI docs)."""
-
 from __future__ import annotations
-
 from typing import Any, Literal, Optional, Union
-
 from pydantic import BaseModel, Field
 
 MAX_BATCH_SIZE = 10_000

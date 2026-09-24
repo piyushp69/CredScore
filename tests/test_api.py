@@ -7,9 +7,7 @@ from backend.schemas import EXAMPLE_PROFILE
 
 def test_root_and_health(client):
     root = client.get("/")
-    assert root.status_code == 200
-    # "/" serves the built React app when web/dist exists, and an API pointer otherwise.
-    assert "text/html" in root.headers["content-type"] or root.json()["docs"] == "/docs"
+    assert root.status_code == 200 and root.json()["docs"] == "/docs"
     health = client.get("/api/v1/health").json()
     assert health["status"] == "ok" and health["model_loaded"] and health["model_version"]
 

@@ -1,4 +1,4 @@
-# Core: pipeline, model and API
+# Core: pipeline, model, API and dashboard
 numpy>=1.26
 pandas>=2.2
 pyarrow>=15
@@ -7,6 +7,8 @@ xgboost>=2.1
 pydantic>=2.6
 fastapi>=0.110
 uvicorn>=0.29
+streamlit>=1.50
+plotly>=5.24
 
 # Dataset download from Kaggle (optional if the CSVs are already in dataset/)
 kagglehub>=0.3

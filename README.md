@@ -1,18 +1,19 @@
 # CredScore
 
-Explainable credit default risk scoring on the [Home Credit Default Risk](https://www.kaggle.com/competitions/home-credit-default-risk) dataset: a reproducible training pipeline, a FastAPI scoring service and a React underwriting dashboard.
+Explainable credit default risk scoring on the [Home Credit Default Risk](https://www.kaggle.com/competitions/home-credit-default-risk) dataset: a reproducible training pipeline, a FastAPI scoring service and a Streamlit underwriting dashboard.
 
 Every applicant gets a probability of default, a 300-850 credit score, a risk band, a recommended decision and a per-feature explanation of how that score was reached.
 
 ```
-dataset/*.csv ──► credscore.pipeline ──► models/          ──► backend (FastAPI) ──► web/ (React + Vite)
-                  features · train        model.ubj            /api/v1/score          underwriting
-                  evaluate · insights     metadata.json        /api/v1/insights       batch scoring
-                                          report.json          /api/v1/model          portfolio insights
-                                          insights.json        ...                    model performance
+dataset/*.csv ──► credscore.pipeline ──► models/          ──┬─► dashboard/ (Streamlit)   underwriting · batch scoring
+                  features · train        model.ubj          │                           portfolio · model performance
+                  evaluate · insights     metadata.json      │
+                                          report.json        └─► backend/ (FastAPI)      /api/v1/score · /api/v1/model
+                                          insights.json                                  /api/v1/insights ...
 ```
 
-The API also serves the dashboard's built assets, so production runs as a single process on one port.
+The dashboard and the API are independent: both load the model bundle in-process through
+`credscore.service.ScoringService`, so the dashboard needs no API server running.
 
 ## Results
 
@@ -44,30 +45,23 @@ pip install -r requirements.txt
 # 1. Data + model (downloads ~1.5 GB from Kaggle if dataset/ is empty)
 python -m credscore.pipeline all          # ~2 minutes with a GPU, ~10 on CPU
 
-# 2. Dashboard assets
-cd web && npm install && npm run build && cd ..
+# 2. Dashboard -> http://localhost:8501
+streamlit run streamlit_app.py
 
-# 3. API + dashboard -> http://127.0.0.1:8000  (API docs at /docs)
+# 3. (optional) REST API -> http://127.0.0.1:8000  (docs at /docs)
 uvicorn backend.app:app --port 8000
-```
-
-While working on the dashboard, run Vite's dev server instead for hot reload; it proxies `/api` to the
-backend on port 8000:
-
-```bash
-cd web && npm run dev      # http://localhost:5173
 ```
 
 The Kaggle download needs credentials (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME` / `KAGGLE_KEY`) and acceptance of the competition rules. If the CSVs are already in `dataset/`, the download step is skipped.
 
 Individual steps: `python -m credscore.pipeline {download,features,train,insights}`, with `--sample 20000` for a fast run, `--device cpu|cuda|auto`, `--data-dir`, `--model-dir`.
 
-To serve an already-trained bundle in a container: `docker compose up --build` (API and dashboard on 8000). The image builds the dashboard with Node and serves it from the API; training still runs on the host, and `./models` is mounted read-only.
+To serve an already-trained bundle in containers: `docker compose up --build` (dashboard on 8501, API on 8000, both from one image). Training still runs on the host, and `./models` is mounted read-only.
 
 ## Dashboard
 
-Dark glassmorphism UI: translucent blurred panels over a colour field, hover lift on cards and
-controls, and charts drawn with Recharts on a colour-vision-safe palette.
+Streamlit app (`streamlit_app.py` + `dashboard/`) with interactive Plotly charts on a colour-vision-safe
+palette. Theme and upload limits live in `.streamlit/config.toml`.
 
 | Page | What it does |
 |---|---|
@@ -76,7 +70,7 @@ controls, and charts drawn with Recharts on a colour-vision-safe palette.
 | **Portfolio insights** | Observed default rates across 15 applicant segments of the 307,511 labelled applications, plus where risk concentrates. |
 | **Model performance** | Discrimination, calibration, decision-policy economics, global feature importance and fairness monitoring, all from the held-out test set. |
 
-The dashboard talks only to the REST API, so it never loads the model itself.
+The model is loaded once per server process (`st.cache_resource`) and shared by every session.
 
 ## API
 
@@ -143,24 +137,21 @@ credscore/           core package (shared by pipeline and API)
   evaluation.py      metrics, curves, gains, fairness
   labels.py          human-readable feature names and value formatting
   pipeline/          download -> features -> train -> insights (python -m credscore.pipeline)
-backend/             FastAPI service (app factory, schemas, static hosting of web/dist)
-web/                 React dashboard (Vite)
-  src/api.js         API client + data-loading hook
-  src/lib.js         formatting, CSV parse/serialise, example applicants
-  src/ui.jsx         glass primitives, chart theme, table, form controls
-  src/App.jsx        shell, navigation, API status
-  src/pages/         underwriting · batch · portfolio · performance
+backend/             FastAPI service (app factory, schemas)
+streamlit_app.py     dashboard entrypoint: navigation, model status
+dashboard/           Streamlit pages
+  common.py          model loading, formatting, chart styling, example applicants
+  underwriting.py    · batch.py · portfolio.py · performance.py
 tests/               pytest suite incl. synthetic-data pipeline fixture
 ```
 
 ## Tests
 
 ```bash
-python -m pytest            # 37 tests, ~15 s
-cd web && npm run build     # type-free build check for the dashboard
+python -m pytest            # 43 tests, ~15 s
 ```
 
-The Python suite builds a synthetic Home Credit-shaped dataset, runs the real pipeline CLI over it, then exercises the API against that model — so it needs neither the 1.5 GB dataset nor a trained model.
+The suite builds a synthetic Home Credit-shaped dataset, runs the real pipeline CLI over it, then exercises the API and every dashboard page (headlessly, via Streamlit's `AppTest`) against that model — so it needs neither the 1.5 GB dataset nor a trained model.
 
 ## Configuration
 
@@ -168,7 +159,6 @@ The Python suite builds a synthetic Home Credit-shaped dataset, runs the real pi
 |---|---|---|
 | `CREDSCORE_DATA_DIR` | `dataset/` | Raw CSVs and `features.parquet` |
 | `CREDSCORE_MODEL_DIR` | `models/` | Model bundle, report, insights |
-| `VITE_API_URL` | same origin | API base URL baked into the dashboard build |
 | `CREDSCORE_APPROVE_PD` / `CREDSCORE_DECLINE_PD` | from training | Override decision cut-offs at serving time |
 | `CREDSCORE_CORS_ORIGINS` | `*` | Comma-separated CORS allow-list |
 

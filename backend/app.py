@@ -7,17 +7,13 @@ Docs at:   http://127.0.0.1:8000/docs
 from __future__ import annotations
 
 import logging
-import math
 import os
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from pydantic import ValidationError
 
 from credscore import __version__
 from credscore.model import ModelNotFoundError
@@ -34,7 +30,6 @@ from .schemas import (
 )
 
 log = logging.getLogger("credscore.api")
-WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 
 @asynccontextmanager
@@ -130,14 +125,6 @@ def score_features(service: Service, request: FeatureScoreRequest, top_k: int = 
     return result
 
 
-def _clean_row(row: dict) -> dict:
-    """CSV-friendly: NaN and empty strings mean 'not provided'."""
-    return {
-        k: None if (isinstance(v, float) and math.isnan(v)) or (isinstance(v, str) and not v.strip()) else v
-        for k, v in row.items()
-    }
-
-
 @router.post("/score/batch", response_model=BatchResponse, tags=["scoring"])
 def score_batch(
     service: Service,
@@ -145,43 +132,7 @@ def score_batch(
     reasons: int = Query(3, ge=0, le=10, description="Risk reasons per applicant (0 is fastest)."),
 ):
     """Score up to 10,000 applicant profiles. Invalid rows are reported, not fatal."""
-    # Plain dicts: FastAPI validates the response once against BatchResponse, so
-    # building pydantic objects here would only repeat that work per row.
-    items: list[dict] = []
-    valid: list[tuple[int, ApplicantProfile]] = []
-    for index, raw in enumerate(request.applicants):
-        row = _clean_row(raw)
-        applicant_id = row.pop("applicant_id", None)
-        item = {"index": index, "applicant_id": None if applicant_id is None else str(applicant_id),
-                "result": None, "error": None}
-        try:
-            profile = ApplicantProfile.model_validate(row)
-            errors = service.profile_errors(profile)
-        except ValidationError as exc:
-            errors = [f"{'.'.join(map(str, e['loc'])) or 'row'}: {e['msg']}" for e in exc.errors()]
-        if errors:
-            item["error"] = "; ".join(errors)
-        else:
-            valid.append((index, profile))
-        items.append(item)
-
-    results = service.score_profiles([p for _, p in valid], top_k=0, n_reasons=reasons)
-    for (index, _), result in zip(valid, results):
-        items[index]["result"] = result
-
-    decisions = {"APPROVE": 0, "REVIEW": 0, "DECLINE": 0}
-    for result in results:
-        decisions[result["decision"]] += 1
-    n = len(results)
-    summary = {
-        "submitted": len(items),
-        "scored": n,
-        "failed": len(items) - n,
-        "decisions": decisions,
-        "mean_probability_of_default": round(sum(r["probability_of_default"] for r in results) / n, 6) if n else None,
-        "mean_credit_score": round(sum(r["credit_score"] for r in results) / n, 1) if n else None,
-    }
-    return {"summary": summary, "results": items}
+    return service.score_batch(request.applicants, n_reasons=reasons)
 
 
 def create_app() -> FastAPI:
@@ -207,14 +158,9 @@ def create_app() -> FastAPI:
 
     app.include_router(router)
 
-    # Serve the built React app from the same origin when it exists (`npm run build`
-    # in web/). In development the Vite dev server proxies /api here instead.
-    if WEB_DIST.is_dir():
-        app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
-    else:
-        @app.get("/", include_in_schema=False)
-        def root():
-            return {"name": "CredScore API", "version": __version__, "docs": "/docs", "health": "/api/v1/health"}
+    @app.get("/", include_in_schema=False)
+    def root():
+        return {"name": "CredScore API", "version": __version__, "docs": "/docs", "health": "/api/v1/health"}
 
     return app
 

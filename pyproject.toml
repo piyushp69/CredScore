@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "credscore"
 version = "2.0.0"
-description = "Explainable credit default risk scoring on the Home Credit dataset: pipeline, REST API and React dashboard."
+description = "Explainable credit default risk scoring on the Home Credit dataset: pipeline, REST API and Streamlit dashboard."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -17,6 +17,8 @@ dependencies = [
     "pydantic>=2.6",
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    "streamlit>=1.50",
+    "plotly>=5.24",
 ]
 
 [project.optional-dependencies]
@@ -24,7 +26,7 @@ download = ["kagglehub>=0.3"]
 dev = ["pytest>=8", "httpx>=0.27"]
 
 [tool.setuptools.packages.find]
-include = ["credscore*", "backend*"]
+include = ["credscore*", "backend*", "dashboard*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

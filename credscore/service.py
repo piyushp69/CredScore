@@ -1,6 +1,6 @@
 """Scoring service: applicant data in, decision-ready results out.
 
-Used by the FastAPI backend, and directly by tests and notebooks.
+Used by the FastAPI backend, the Streamlit dashboard, tests and notebooks.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from functools import cached_property
 from pathlib import Path
 
 import numpy as np
+from pydantic import ValidationError
 
 from . import config
 from .features import DERIVED_FEATURES
@@ -32,6 +33,14 @@ def _json_value(value):
     if isinstance(value, (int, np.integer)):
         return int(value)
     return str(value)
+
+
+def _clean_row(row: dict) -> dict:
+    """CSV-friendly: NaN and empty strings mean 'not provided'."""
+    return {
+        k: None if (isinstance(v, float) and math.isnan(v)) or (isinstance(v, str) and not v.strip()) else v
+        for k, v in row.items()
+    }
 
 
 class ScoringService:
@@ -105,6 +114,48 @@ class ScoringService:
                 result |= self._explain(columns, i, contributions[i], candidates[i], record.keys(), top_k, n_reasons)
             results.append(result)
         return results
+
+    def score_batch(self, rows: list[dict], n_reasons: int = 3) -> dict:
+        """Score raw applicant rows (e.g. parsed CSV). Invalid rows are reported, not fatal.
+
+        Each row may carry an `applicant_id`; NaN and blank values mean "not provided".
+        Returns plain dicts: `{"summary": {...}, "results": [{index, applicant_id, result, error}]}`.
+        """
+        items: list[dict] = []
+        valid: list[tuple[int, ApplicantProfile]] = []
+        for index, raw in enumerate(rows):
+            row = _clean_row(raw)
+            applicant_id = row.pop("applicant_id", None)
+            item = {"index": index, "applicant_id": None if applicant_id is None else str(applicant_id),
+                    "result": None, "error": None}
+            try:
+                profile = ApplicantProfile.model_validate(row)
+                errors = self.profile_errors(profile)
+            except ValidationError as exc:
+                errors = [f"{'.'.join(map(str, e['loc'])) or 'row'}: {e['msg']}" for e in exc.errors()]
+            if errors:
+                item["error"] = "; ".join(errors)
+            else:
+                valid.append((index, profile))
+            items.append(item)
+
+        results = self.score_profiles([p for _, p in valid], top_k=0, n_reasons=n_reasons)
+        for (index, _), result in zip(valid, results):
+            items[index]["result"] = result
+
+        decisions = {"APPROVE": 0, "REVIEW": 0, "DECLINE": 0}
+        for result in results:
+            decisions[result["decision"]] += 1
+        n = len(results)
+        summary = {
+            "submitted": len(items),
+            "scored": n,
+            "failed": len(items) - n,
+            "decisions": decisions,
+            "mean_probability_of_default": round(sum(r["probability_of_default"] for r in results) / n, 6) if n else None,
+            "mean_credit_score": round(sum(r["credit_score"] for r in results) / n, 1) if n else None,
+        }
+        return {"summary": summary, "results": items}
 
     def _decision(self, pd_value: float, score: int) -> dict:
         return {

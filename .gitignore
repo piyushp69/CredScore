@@ -19,7 +19,3 @@ models/*
 .ipynb_checkpoints/
 
 .streamlit/secrets.toml
-
-# React dashboard
-web/node_modules/
-web/dist/

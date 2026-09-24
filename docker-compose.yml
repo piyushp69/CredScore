@@ -1,8 +1,21 @@
-# Serves the API and the dashboard from one container, using an already-trained
-# bundle in ./models. Train first on the host: python -m credscore.pipeline all
+# Runs the dashboard (8501) and the REST API (8000) from one image, using an
+# already-trained bundle in ./models. Train first on the host: python -m credscore.pipeline all
 services:
-  credscore:
+  dashboard:
     build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8501/_stcore/health').status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    command: ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
     volumes:
