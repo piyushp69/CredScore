@@ -7,8 +7,8 @@
 Every applicant gets a probability of default, a 300–850 credit score, a risk band, a recommended decision
 and a per-feature explanation of how that score was reached.
 
-<a href="https://credscore.streamlit.app"><img src="https://static.streamlit.io/badges/streamlit_badge_black_white.svg" alt="Open the live app" height="32"></a>
-<a href="https://codespaces.new/piyushp69/CredScore?quickstart=1"><img src="https://github.com/codespaces/badge.svg" alt="Open in GitHub Codespaces" height="32"></a>
+[![Open the live app](https://img.shields.io/badge/Open%20the%20live%20app-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://credscore.streamlit.app)
+[![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in%20Codespaces-24292F?style=for-the-badge&logo=github&logoColor=white)](https://codespaces.new/piyushp69/CredScore?quickstart=1)
 
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Streamlit 1.52+](https://img.shields.io/badge/Streamlit-1.52%2B-FF4B4B?logo=streamlit&logoColor=white)
@@ -158,11 +158,11 @@ the 8.07% actual base rate.
 The decision policy derived from the validation set approves the safest 70% (PD below 8.4%) and declines the
 riskiest 10% (PD of 18.9% or more):
 
-| Decision | Share | Default rate | Of all defaulters |
-|---|---|---|---|
-| Approve | 70.1% | 3.6% | 31.1% |
-| Manual review | 19.8% | 12.9% | 31.7% |
-| Decline | 10.1% | 29.8% | 37.2% |
+| Decision (share of applicants) | Default rate | Share of all defaulters |
+|---|---|---|
+| Approve (70.1%) | 3.6% | 31.1% |
+| Manual review (19.8%) | 12.9% | 31.7% |
+| Decline (10.1%) | 29.8% | 37.2% |
 
 ## Quick start
 
@@ -210,17 +210,15 @@ is loaded once per server process (`st.cache_resource`) and shared by every sess
 
 [FastAPI](https://fastapi.tiangolo.com) service in [`backend/app.py`](backend/app.py); interactive docs at `/docs`.
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /api/v1/health` | Liveness and loaded model version |
-| `GET /api/v1/model` | Version, test metrics, decision policy, scorecard |
-| `GET /api/v1/model/performance` | Curves, calibration, gains, bands, fairness |
-| `GET /api/v1/model/importance` | Global mean \|SHAP\| importance |
-| `GET /api/v1/schema` | Applicant fields, allowed category values, defaults |
-| `GET /api/v1/insights` | Portfolio default rates by segment |
-| `POST /api/v1/score` | Score one applicant profile |
-| `POST /api/v1/score/batch` | Score up to 10,000 profiles; bad rows are reported, not fatal |
-| `POST /api/v1/score/features` | Score raw model features (advanced) |
+- `GET /api/v1/health` — liveness and loaded model version
+- `GET /api/v1/model` — version, test metrics, decision policy, scorecard
+- `GET /api/v1/model/performance` — curves, calibration, gains, bands, fairness
+- `GET /api/v1/model/importance` — global mean |SHAP| importance
+- `GET /api/v1/schema` — applicant fields, allowed category values, defaults
+- `GET /api/v1/insights` — portfolio default rates by segment
+- `POST /api/v1/score` — score one applicant profile
+- `POST /api/v1/score/batch` — score up to 10,000 profiles; bad rows are reported, not fatal
+- `POST /api/v1/score/features` — score raw model features (advanced)
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/score \
